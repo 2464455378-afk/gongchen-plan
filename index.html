@@ -163,6 +163,32 @@
   .range button{padding:4px 10px;font-size:12px}
   .chart-note{font-size:12px;color:var(--dim);margin-top:8px}
   .backup-row{display:flex;gap:8px;flex-wrap:wrap}
+  /* 财务 */
+  .fin-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .fin-stat{background:var(--card-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .fin-stat .v{font-size:21px;font-weight:800;color:var(--cream)}
+  .fin-stat .v.sp{color:var(--gold)} .fin-stat .v.neg{color:var(--redx)} .fin-stat .v.pos{color:var(--green)}
+  .fin-stat .l{font-size:12px;color:var(--muted2);margin-top:3px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:var(--card-2);color:var(--muted2);border-radius:0;padding:8px 18px;font-weight:600}
+  .seg button.on{background:rgba(236,197,78,.16);color:var(--gold)}
+  .txn{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .txn:last-child{border-bottom:none}
+  .txn .ic{width:30px;height:30px;border-radius:8px;background:var(--card-2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--gold);flex-shrink:0}
+  .txn .info{flex:1;min-width:0}
+  .txn .info b{font-size:14px;font-weight:600;color:var(--cream)}
+  .txn .info i{font-size:11px;color:var(--dim);font-style:normal;display:block}
+  .txn .amt{font-weight:700}
+  .txn .amt.exp{color:var(--redx)} .txn .amt.inc{color:var(--green)}
+  .catbar{margin-bottom:10px}
+  .catbar .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+  .catbar .top .c{color:var(--cream)} .catbar .top .m{color:var(--muted2)}
+  .catbar .bar{height:8px;background:rgba(0,0,0,.3);border-radius:6px;overflow:hidden}
+  .catbar .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-deep),var(--gold-2));border-radius:6px}
+  .acct{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .acct:last-child{border-bottom:none}
+  .acct .an{flex:1;font-size:14px;color:var(--cream)}
+  .acct .ab{font-weight:700;color:var(--gold)}
   /* 响应式 */
   @media(max-width:760px){
     .app{flex-direction:column}
@@ -204,6 +230,7 @@
       <div class="nav-item active" data-s="today" onclick="showSection('today')"><span class="st">★</span><span><b>今日</b><i>待办 · 作息</i></span></div>
       <div class="nav-item" data-s="habits" onclick="showSection('habits')"><span class="st">★</span><span><b>习惯养成</b><i>生活 · 学习 · 工作</i></span></div>
       <div class="nav-item" data-s="goals" onclick="showSection('goals')"><span class="st">★</span><span><b>长期规划</b><i>目标 · 进度</i></span></div>
+      <div class="nav-item" data-s="finance" onclick="showSection('finance')"><span class="st">★</span><span><b>财务管理</b><i>资产 · 记账 · 预算</i></span></div>
       <div class="nav-item" data-s="discipline" onclick="showSection('discipline')"><span class="st">★</span><span><b>自律</b><i>戒色 · 减肥</i></span></div>
       <div class="nav-item" data-s="stats" onclick="showSection('stats')"><span class="st">★</span><span><b>数据统计</b><i>日历 · 趋势</i></span></div>
       <div class="nav-item" data-s="backup" onclick="showSection('backup')"><span class="st">★</span><span><b>数据备份</b><i>导出 · 导入</i></span></div>
@@ -298,6 +325,71 @@
         <div class="card">
           <h2>📌 目标清单 <span class="en">GOALS</span></h2>
           <div id="goalList"></div>
+        </div>
+      </section>
+
+      <!-- 财务管理 -->
+      <section id="sec-finance" class="section">
+        <div class="eyebrow">★ 财务管理 · FINANCE</div>
+        <h1 class="big">FINANCE</h1>
+        <p class="lead">记录每天的开销与收入，掌握总资产，盯紧每月预算。</p>
+
+        <div class="card">
+          <h2>💰 财务总览 <span class="en">OVERVIEW</span></h2>
+          <div class="fin-grid">
+            <div class="fin-stat"><div class="v pos" id="finAssets">¥0.00</div><div class="l">总资产</div></div>
+            <div class="fin-stat"><div class="v sp" id="finMonth">¥0.00</div><div class="l">本月支出</div></div>
+            <div class="fin-stat"><div class="v sp" id="finToday">¥0.00</div><div class="l">今日支出</div></div>
+            <div class="fin-stat"><div class="v" id="finRemain">—</div><div class="l">本月预算剩余</div></div>
+          </div>
+          <div class="pbar"><i id="finBudgetBar" style="width:0%"></i></div>
+          <p class="hint" id="finBudgetNote"></p>
+          <div class="row" style="margin-top:12px">
+            <div class="field"><label>本月预算 (¥)</label><input type="number" id="finBudget" step="100" onchange="saveBudget()" placeholder="如 3000"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>✏️ 记一笔 <span class="en">ADD</span></h2>
+          <div class="seg" id="txType" style="margin-bottom:12px">
+            <button class="on" onclick="setTxType('expense')">支出</button>
+            <button onclick="setTxType('income')">收入</button>
+          </div>
+          <div class="add-row">
+            <input type="number" id="txAmount" step="0.01" placeholder="金额 ¥" style="flex:1">
+            <select id="txCat"></select>
+          </div>
+          <div class="add-row">
+            <div class="field"><label>日期</label><input type="date" id="txDate"></div>
+            <div class="field" style="flex:2"><label>备注（可选）</label><input id="txNote" placeholder="买了什么…"></div>
+            <button onclick="addTx()" style="align-self:flex-end">记账</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>🏦 账户与资产 <span class="en">ASSETS</span></h2>
+          <div class="add-row">
+            <input id="acctName" placeholder="账户名，如 招行 / 支付宝 / 现金" style="flex:2">
+            <input type="number" id="acctBal" step="0.01" placeholder="余额 ¥" style="flex:1">
+            <button onclick="addAccount()">添加</button>
+          </div>
+          <div id="acctList"></div>
+          <p class="hint">负债填负数（如信用卡欠款 -2000）。总资产 = 所有账户余额之和。</p>
+        </div>
+
+        <div class="card">
+          <h2>📊 本月支出构成 <span class="en">BY CATEGORY</span></h2>
+          <div id="catBreakdown"></div>
+        </div>
+
+        <div class="card">
+          <h2>📈 本月每日支出 <span class="en">DAILY</span></h2>
+          <div id="spendChart"></div>
+        </div>
+
+        <div class="card">
+          <h2>🧾 收支明细 <span class="en">RECORDS</span></h2>
+          <div id="txList"></div>
         </div>
       </section>
 
@@ -398,7 +490,7 @@ const escapeHtml=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
 /* ---------- 区块切换 ---------- */
-const SEC_NAME={today:'今日',habits:'习惯养成',goals:'长期规划',discipline:'自律',stats:'数据统计',backup:'数据备份'};
+const SEC_NAME={today:'今日',habits:'习惯养成',goals:'长期规划',finance:'财务管理',discipline:'自律',stats:'数据统计',backup:'数据备份'};
 function showSection(s){
   document.querySelectorAll('.section').forEach(el=>el.classList.toggle('active',el.id==='sec-'+s));
   document.querySelectorAll('#nav .nav-item').forEach(el=>el.classList.toggle('active',el.dataset.s===s));
@@ -710,8 +802,100 @@ function renderTrend(){
   $('trendChart').innerHTML=html;$('trendNote').textContent=note;
 }
 
+/* ---------- 财务管理 ---------- */
+const EXP_CATS=['餐饮','交通','购物','居住','娱乐','医疗','学习','人情','订阅','其他'];
+const INC_CATS=['工资','兼职','理财','红包','报销','其他'];
+let txType='expense';
+const fmt=n=>'¥'+(Number(n)||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const monthKey=()=>todayKey().slice(0,7);
+function setTxType(t){
+  txType=t;
+  document.querySelectorAll('#txType button').forEach((b,i)=>b.classList.toggle('on',(t==='expense'&&i===0)||(t==='income'&&i===1)));
+  fillCats();
+}
+function fillCats(){const cats=txType==='expense'?EXP_CATS:INC_CATS;$('txCat').innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('')}
+function addTx(){
+  const amt=parseFloat($('txAmount').value);if(!amt||amt<=0){alert('请输入有效金额');return}
+  const tx=load('fin_tx',[]);
+  tx.push({id:uid(),date:$('txDate').value||todayKey(),amount:amt,type:txType,cat:$('txCat').value,note:$('txNote').value.trim()});
+  save('fin_tx',tx);$('txAmount').value='';$('txNote').value='';renderFinance();
+}
+function delTx(id){save('fin_tx',load('fin_tx',[]).filter(x=>x.id!==id));renderFinance()}
+function addAccount(){
+  const name=$('acctName').value.trim();const bal=parseFloat($('acctBal').value);
+  if(!name){alert('请输入账户名');return}
+  const a=load('fin_accounts',[]);a.push({id:uid(),name,balance:isNaN(bal)?0:bal});
+  save('fin_accounts',a);$('acctName').value='';$('acctBal').value='';renderFinance();
+}
+function delAccount(id){save('fin_accounts',load('fin_accounts',[]).filter(x=>x.id!==id));renderFinance()}
+function saveBudget(){save('fin_budget',$('finBudget').value);renderFinance()}
+function finBarChart(series){
+  if(!series.length||series.every(s=>s.v===0))return '<p class="empty">本月还没有支出记录</p>';
+  const W=680,H=170,padL=46,padR=12,padT=14,padB=24;const n=series.length;
+  const max=Math.max(...series.map(s=>s.v),1);const bw=(W-padL-padR)/n;const gap=Math.min(3,bw*0.2);
+  const Y=v=>padT+(1-v/max)*(H-padT-padB);
+  const bars=series.map((s,i)=>{const x=padL+i*bw;const h=(H-padT-padB)*(s.v/max);
+    return `<rect x="${(x+gap/2).toFixed(1)}" y="${(H-padB-h).toFixed(1)}" width="${Math.max(1,bw-gap).toFixed(1)}" height="${h.toFixed(1)}" rx="1.2" fill="#ecc54e"/>`}).join('');
+  const grid=[max/2,max].map(v=>`<line x1="${padL}" y1="${Y(v).toFixed(1)}" x2="${W-padR}" y2="${Y(v).toFixed(1)}" stroke="rgba(236,197,78,.13)"/><text x="${padL-6}" y="${(Y(v)+4).toFixed(1)}" fill="#cdaf6a" font-size="11" text-anchor="end">${Math.round(v)}</text>`).join('');
+  const xl=`<text x="${padL}" y="${H-8}" fill="#cdaf6a" font-size="11">${series[0].d.slice(5)}</text><text x="${W-padR}" y="${H-8}" fill="#cdaf6a" font-size="11" text-anchor="end">${series[n-1].d.slice(5)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}">${grid}${bars}${xl}</svg>`;
+}
+function renderFinance(){
+  if(!$('txCat').innerHTML)fillCats();
+  if(!$('txDate').value)$('txDate').value=todayKey();
+  $('finBudget').value=load('fin_budget','')||'';
+  const tx=load('fin_tx',[]);const acc=load('fin_accounts',[]);const budget=parseFloat(load('fin_budget',''))||0;
+  const assets=acc.reduce((s,a)=>s+(+a.balance||0),0);
+  $('finAssets').textContent=fmt(assets);$('finAssets').className='v '+(assets>=0?'pos':'neg');
+  const mk=monthKey();
+  const monthExp=tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk).reduce((s,t)=>s+t.amount,0);
+  const todayExp=tx.filter(t=>t.type==='expense'&&t.date===todayKey()).reduce((s,t)=>s+t.amount,0);
+  $('finMonth').textContent=fmt(monthExp);$('finToday').textContent=fmt(todayExp);
+  const remain=budget-monthExp;
+  $('finRemain').textContent=budget?fmt(remain):'—';
+  $('finRemain').className='v '+(budget?(remain>=0?'pos':'neg'):'');
+  const pct=budget?Math.min(100,monthExp/budget*100):0;
+  const bar=$('finBudgetBar');bar.style.width=pct+'%';
+  bar.style.background=(budget&&monthExp>budget)?'linear-gradient(90deg,#a8161f,#f08a7a)':'';
+  if(budget){
+    const now=new Date();const dayNum=now.getDate();const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+    const avg=monthExp/dayNum;const proj=avg*dim;
+    $('finBudgetNote').textContent=`日均 ${fmt(avg)} · 按此速度本月预计 ${fmt(proj)}`+(monthExp>budget?' · 已超预算':` · 剩 ${fmt(remain)}`);
+  }else $('finBudgetNote').textContent='设置本月预算后，这里显示进度与花钱速度预测。';
+  renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,mk);
+  const now=new Date(),y=now.getFullYear(),m=now.getMonth(),dn=now.getDate();const series=[];
+  for(let d=1;d<=dn;d++){const key=dKey(new Date(y,m,d));series.push({d:key,v:tx.filter(t=>t.type==='expense'&&t.date===key).reduce((s,t)=>s+t.amount,0)})}
+  $('spendChart').innerHTML=finBarChart(series);
+}
+function renderTxList(tx){
+  const el=$('txList');
+  if(!tx.length){el.innerHTML='<p class="empty">还没有记账，去上面记一笔</p>';return}
+  const sorted=[...tx].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,40);
+  el.innerHTML=sorted.map(t=>`<div class="txn">
+    <div class="ic">${escapeHtml(t.cat.slice(0,2))}</div>
+    <div class="info"><b>${escapeHtml(t.cat)}${t.note?' · '+escapeHtml(t.note):''}</b><i>${t.date}</i></div>
+    <div class="amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}${fmt(t.amount)}</div>
+    <button class="del" onclick="delTx('${t.id}')">×</button></div>`).join('');
+}
+function renderAccounts(acc){
+  const el=$('acctList');
+  if(!acc.length){el.innerHTML='<p class="empty">添加账户以统计总资产</p>';return}
+  el.innerHTML=acc.map(a=>`<div class="acct"><span class="an">${escapeHtml(a.name)}</span><span class="ab">${fmt(a.balance)}</span><button class="del" onclick="delAccount('${a.id}')">×</button></div>`).join('');
+}
+function renderCatBreakdown(tx,mk){
+  const exp=tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk);
+  const el=$('catBreakdown');
+  if(!exp.length){el.innerHTML='<p class="empty">本月还没有支出记录</p>';return}
+  const by={};exp.forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
+  const total=Object.values(by).reduce((s,v)=>s+v,0);
+  el.innerHTML=Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{
+    const p=Math.round(v/total*100);
+    return `<div class="catbar"><div class="top"><span class="c">${escapeHtml(c)}</span><span class="m">${fmt(v)} · ${p}%</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
+  }).join('');
+}
+
 /* ---------- 数据备份 ---------- */
-const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['sleep','sleepLog','abstain','weights','goalWeight','habits','goals'].includes(k)||k.startsWith('todos_'));
+const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['sleep','sleepLog','abstain','weights','goalWeight','habits','goals','fin_tx','fin_accounts','fin_budget'].includes(k)||k.startsWith('todos_'));
 function exportData(){
   const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
   const blob=new Blob([JSON.stringify({_app:'life-planner',_date:todayKey(),data},null,2)],{type:'application/json'});
@@ -735,6 +919,7 @@ function importData(e){
 /* ---------- 初始化 ---------- */
 $('todayLead').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})+' · 今天要完成的事，以及今晚的作息安排。';
 renderTodos();renderSleep();renderSleepLog();renderHabits();renderGoals();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
+setTxType('expense');renderFinance();
 setInterval(renderSleep,60000);
 </script>
 </body>
