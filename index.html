@@ -29,6 +29,7 @@
     background:var(--accent);color:#fff;padding:10px 16px;white-space:nowrap;transition:opacity .15s}
   button:hover{opacity:.88}
   button.ghost{background:var(--card2);color:var(--text);border:1px solid var(--line)}
+  button.sm{padding:6px 12px;font-size:13px}
   ul{list-style:none}
   .todo-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
   .todo-item:last-child{border-bottom:none}
@@ -49,7 +50,7 @@
   .streak .num{font-size:34px;font-weight:700;color:var(--green)}
   .streak .unit{color:var(--muted);font-size:14px}
   .streak.red .num{color:var(--red)}
-  .check-row{display:flex;gap:8px;align-items:center}
+  .check-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .badge{font-size:12px;padding:3px 10px;border-radius:20px;background:var(--card2);color:var(--muted)}
   .badge.ok{background:rgba(52,211,153,.15);color:var(--green)}
   /* 减肥 */
@@ -61,6 +62,37 @@
   .stat .v.down{color:var(--green)} .stat .v.up{color:var(--red)}
   svg{width:100%;height:auto;display:block}
   .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  /* 日历 */
+  .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .cal-head .m{font-size:14px;font-weight:600}
+  .cal-nav{display:flex;gap:6px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .cal-grid .wd{text-align:center;font-size:11px;color:var(--muted);padding-bottom:4px}
+  .cell{aspect-ratio:1;background:var(--card2);border-radius:8px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-size:12px;position:relative;color:var(--muted)}
+  .cell.cur{color:var(--text)}
+  .cell.today{outline:1.5px solid var(--accent)}
+  .cell.empty-cell{background:transparent}
+  .dots{display:flex;gap:2px;margin-top:3px;height:5px}
+  .dot{width:5px;height:5px;border-radius:50%}
+  .dot.g{background:var(--green)} .dot.a{background:var(--amber)} .dot.b{background:var(--accent)}
+  .legend{display:flex;gap:14px;margin-top:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:5px}
+  /* 周回顾 */
+  .review-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rev{background:var(--card2);border-radius:10px;padding:12px 14px}
+  .rev .v{font-size:22px;font-weight:700} .rev .l{font-size:12px;color:var(--muted);margin-top:3px}
+  /* 趋势图 */
+  .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .tab{padding:6px 12px;font-size:13px;border-radius:8px;background:var(--card2);color:var(--muted);
+    border:1px solid var(--line);cursor:pointer}
+  .tab.active{background:rgba(108,140,255,.18);color:var(--accent);border-color:var(--accent)}
+  .range{display:flex;gap:6px;margin-top:10px}
+  .range button{padding:4px 10px;font-size:12px}
+  .chart-note{font-size:12px;color:var(--muted);margin-top:8px}
+  .log-row{display:flex;gap:8px;align-items:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  /* 备份 */
+  .backup-row{display:flex;gap:8px;flex-wrap:wrap}
   footer{text-align:center;color:var(--muted);font-size:12px;margin:24px 0 8px}
 </style>
 </head>
@@ -95,6 +127,11 @@
     </div>
   </div>
   <div class="countdown" id="sleepInfo"></div>
+  <div class="log-row">
+    <div class="field"><label>记录昨晚实际入睡时间</label><input type="time" id="actualBed"></div>
+    <button class="sm" onclick="logSleep()">记录</button>
+  </div>
+  <p class="hint" id="sleepLogInfo"></p>
 </div>
 
 <!-- 戒色 -->
@@ -123,15 +160,63 @@
   </div>
 </div>
 
-<footer>仅你本人可见 · 清除浏览器数据会丢失记录</footer>
+<!-- 打卡日历 -->
+<div class="card">
+  <h2><span class="icon" style="background:rgba(52,211,153,.2)">📅</span>打卡日历</h2>
+  <div class="cal-head">
+    <button class="ghost sm" onclick="calMove(-1)">‹</button>
+    <span class="m" id="calMonth"></span>
+    <button class="ghost sm" onclick="calMove(1)">›</button>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+  <div class="legend">
+    <span><i class="dot g"></i>戒色打卡</span>
+    <span><i class="dot a"></i>记录体重</span>
+    <span><i class="dot b"></i>待办清空</span>
+  </div>
+</div>
+
+<!-- 每周回顾 -->
+<div class="card">
+  <h2><span class="icon" style="background:rgba(108,140,255,.2)">📊</span>本周回顾（近 7 天）</h2>
+  <div class="review-grid" id="reviewGrid"></div>
+  <p class="hint" id="reviewNote"></p>
+</div>
+
+<!-- 趋势图 -->
+<div class="card">
+  <h2><span class="icon" style="background:rgba(108,140,255,.2)">📈</span>趋势图</h2>
+  <div class="tabs" id="trendTabs">
+    <div class="tab active" data-t="todo" onclick="switchTrend('todo')">待办完成率</div>
+    <div class="tab" data-t="abstain" onclick="switchTrend('abstain')">戒色连续天数</div>
+    <div class="tab" data-t="weight" onclick="switchTrend('weight')">体重</div>
+    <div class="tab" data-t="sleep" onclick="switchTrend('sleep')">睡眠时间</div>
+  </div>
+  <div id="trendChart"></div>
+  <div class="range" id="trendRange"></div>
+  <p class="chart-note" id="trendNote"></p>
+</div>
+
+<!-- 数据备份 -->
+<div class="card">
+  <h2><span class="icon" style="background:rgba(167,139,250,.2)">💾</span>数据备份</h2>
+  <p class="hint" style="margin:0 0 12px">数据只存在本浏览器。换设备或清缓存前，先导出备份；需要时再导入恢复。</p>
+  <div class="backup-row">
+    <button onclick="exportData()">导出备份文件</button>
+    <button class="ghost" onclick="document.getElementById('importFile').click()">导入备份</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+
+<footer>仅你本人可见 · 清除浏览器数据会丢失记录，记得定期备份</footer>
 
 <script>
 const $=id=>document.getElementById(id);
 const todayKey=()=>new Date().toLocaleDateString('sv'); // YYYY-MM-DD
+const dKey=d=>d.toLocaleDateString('sv');
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}};
 const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 
-// 日期标题
 $('today').textContent=new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'});
 
 /* ---------- 待办 ---------- */
@@ -152,7 +237,7 @@ function addTodo(){
 }
 function toggleTodo(i){todos[i].done=!todos[i].done;persistTodos()}
 function delTodo(i){todos.splice(i,1);persistTodos()}
-function persistTodos(){save('todos_'+todayKey(),todos);renderTodos()}
+function persistTodos(){save('todos_'+todayKey(),todos);renderTodos();renderCal();renderReview();renderTrend()}
 $('todoInput').addEventListener('keydown',e=>{if(e.key==='Enter')addTodo()});
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
@@ -171,10 +256,32 @@ function renderSleep(){
   const wakeStr=wake.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
   $('sleepInfo').textContent=`距离入睡还有 ${hh} 小时 ${mm} 分 · 睡满后约 ${wakeStr} 起床`;
 }
+// 将 HH:MM 转为连续数值（小时），凌晨时段 +24，便于画趋势（越小=越早睡）
+function bedToNum(t){let[h,m]=t.split(':').map(Number);let v=h+m/60;if(v<12)v+=24;return v}
+function numToHM(v){if(v>=24)v-=24;const h=Math.floor(v),m=Math.round((v-h)*60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
+function logSleep(){
+  const t=$('actualBed').value;if(!t)return;
+  const log=load('sleepLog',[]);const k=todayKey();
+  const idx=log.findIndex(x=>x.d===k);
+  if(idx>=0)log[idx].t=t;else log.push({d:k,t});
+  log.sort((a,b)=>a.d<b.d?-1:1);
+  save('sleepLog',log);$('actualBed').value='';renderSleepLog();renderTrend();
+}
+function renderSleepLog(){
+  const log=load('sleepLog',[]);
+  if(!log.length){$('sleepLogInfo').textContent='';return}
+  const last=log[log.length-1];
+  $('sleepLogInfo').textContent=`最近记录：${last.d.slice(5)} 入睡 ${last.t} · 已累计记录 ${log.length} 晚`;
+}
 
 /* ---------- 戒色 ---------- */
+function getAbstain(){
+  const a=load('abstain',{start:null,best:0,lastCheck:null,checkedDates:[]});
+  if(!a.checkedDates)a.checkedDates=a.lastCheck?[a.lastCheck]:[];
+  return a;
+}
 function renderAbstain(){
-  const a=load('abstain',{start:null,best:0,lastCheck:null});
+  const a=getAbstain();
   let days=0;
   if(a.start){days=Math.floor((new Date(todayKey())-new Date(a.start))/86400000)+1}
   const el=$('abstainStreak');
@@ -186,31 +293,31 @@ function renderAbstain(){
   $('abstainBest').textContent='最长记录：'+(a.best||days)+' 天';
 }
 function checkAbstain(){
-  const a=load('abstain',{start:null,best:0,lastCheck:null});
+  const a=getAbstain();
   if(!a.start)a.start=todayKey();
   a.lastCheck=todayKey();
+  if(!a.checkedDates.includes(todayKey()))a.checkedDates.push(todayKey());
   const days=Math.floor((new Date(todayKey())-new Date(a.start))/86400000)+1;
   if(days>(a.best||0))a.best=days;
-  save('abstain',a);renderAbstain();
+  save('abstain',a);renderAbstain();renderCal();renderReview();renderTrend();
 }
 function resetAbstain(){
   if(!confirm('确定重置？当前连续天数会清零'))return;
-  const a=load('abstain',{start:null,best:0,lastCheck:null});
+  const a=getAbstain();
   const days=a.start?Math.floor((new Date(todayKey())-new Date(a.start))/86400000)+1:0;
   if(days>(a.best||0))a.best=days;
   a.start=todayKey();a.lastCheck=null;
-  save('abstain',a);renderAbstain();
+  save('abstain',a);renderAbstain();renderCal();renderReview();renderTrend();
 }
 
 /* ---------- 减肥 ---------- */
 function addWeight(){
   const v=parseFloat($('weightInput').value);if(!v)return;
-  const w=load('weights',[]);
-  const k=todayKey();
+  const w=load('weights',[]);const k=todayKey();
   const idx=w.findIndex(x=>x.d===k);
   if(idx>=0)w[idx].v=v;else w.push({d:k,v});
   w.sort((a,b)=>a.d<b.d?-1:1);
-  save('weights',w);$('weightInput').value='';renderWeight();
+  save('weights',w);$('weightInput').value='';renderWeight();renderCal();renderReview();renderTrend();
 }
 function saveGoal(){save('goalWeight',$('goalWeight').value);renderWeight()}
 function renderWeight(){
@@ -247,8 +354,176 @@ function drawChart(w,goal){
   </svg>`;
 }
 
+/* ---------- 打卡日历 ---------- */
+let calRef=new Date(); calRef.setDate(1);
+function calMove(n){calRef.setMonth(calRef.getMonth()+n);renderCal()}
+function dayMarks(key){
+  const a=getAbstain();
+  const w=load('weights',[]);
+  const td=load('todos_'+key,null);
+  return {
+    g:a.checkedDates&&a.checkedDates.includes(key),
+    a:w.some(x=>x.d===key),
+    b:Array.isArray(td)&&td.length>0&&td.every(t=>t.done)
+  };
+}
+function renderCal(){
+  const y=calRef.getFullYear(),m=calRef.getMonth();
+  $('calMonth').textContent=`${y} 年 ${m+1} 月`;
+  const first=new Date(y,m,1).getDay();
+  const days=new Date(y,m+1,0).getDate();
+  const wds=['日','一','二','三','四','五','六'];
+  let html=wds.map(d=>`<div class="wd">${d}</div>`).join('');
+  for(let i=0;i<first;i++)html+=`<div class="cell empty-cell"></div>`;
+  for(let d=1;d<=days;d++){
+    const key=dKey(new Date(y,m,d));
+    const mk=dayMarks(key);
+    const isToday=key===todayKey();
+    let dots='';
+    if(mk.g)dots+='<i class="dot g"></i>';
+    if(mk.a)dots+='<i class="dot a"></i>';
+    if(mk.b)dots+='<i class="dot b"></i>';
+    html+=`<div class="cell cur ${isToday?'today':''}">${d}<div class="dots">${dots}</div></div>`;
+  }
+  $('calGrid').innerHTML=html;
+}
+
+/* ---------- 每周回顾 ---------- */
+function renderReview(){
+  const today=new Date();
+  let abstainDays=0,weightDays=0,todoDone=0,todoTotal=0,bedSum=0,bedCnt=0;
+  const a=getAbstain();const w=load('weights',[]);
+  const last7=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(today);d.setDate(today.getDate()-i);
+    const key=dKey(d);last7.push(key);
+    if(a.checkedDates&&a.checkedDates.includes(key))abstainDays++;
+    if(w.some(x=>x.d===key))weightDays++;
+    const td=load('todos_'+key,null);
+    if(Array.isArray(td)){todoTotal+=td.length;todoDone+=td.filter(t=>t.done).length}
+  }
+  // 体重变化（近7天内最早与最新）
+  const wIn=w.filter(x=>last7.includes(x.d)).sort((p,q)=>p.d<q.d?-1:1);
+  let wChg=null;
+  if(wIn.length>=2)wChg=(wIn[wIn.length-1].v-wIn[0].v).toFixed(1);
+  const todoRate=todoTotal?Math.round(todoDone/todoTotal*100):0;
+  $('reviewGrid').innerHTML=`
+    <div class="rev"><div class="v" style="color:var(--green)">${abstainDays}/7</div><div class="l">戒色打卡天数</div></div>
+    <div class="rev"><div class="v" style="color:var(--accent)">${todoDone}</div><div class="l">完成待办（完成率 ${todoRate}%）</div></div>
+    <div class="rev"><div class="v" style="color:var(--amber)">${weightDays}/7</div><div class="l">记录体重天数</div></div>
+    <div class="rev"><div class="v" style="color:${wChg===null?'var(--muted)':(wChg<=0?'var(--green)':'var(--red)')}">${wChg===null?'—':(wChg>0?'+':'')+wChg}</div><div class="l">本周体重变化 kg</div></div>`;
+  const notes=[];
+  if(abstainDays===7)notes.push('戒色满勤，保持住');
+  else if(abstainDays>=4)notes.push('戒色坚持得不错');
+  if(wChg!==null&&wChg<0)notes.push('体重在往下走，方向对了');
+  if(weightDays<3)notes.push('体重记录有点少，多记才看得到趋势');
+  $('reviewNote').textContent=notes.join(' · ');
+}
+
+/* ---------- 趋势图 ---------- */
+let trendState={tab:'todo',range:30};
+const RANGES={todo:[14,30,90],abstain:[30,90],weight:[30,90,9999],sleep:[14,30,90]};
+function switchTrend(t){
+  trendState.tab=t;trendState.range=RANGES[t][0];
+  document.querySelectorAll('#trendTabs .tab').forEach(el=>el.classList.toggle('active',el.dataset.t===t));
+  renderTrend();
+}
+function setRange(r){trendState.range=r;renderTrend()}
+// 通用折线图：series=[{d:'YYYY-MM-DD',v:Number}]；opts={color,avg,yfmt,unit}
+function lineChart(series,opts={}){
+  const color=opts.color||'#6c8cff',yfmt=opts.yfmt||(v=>v),unit=opts.unit||'';
+  if(series.length<2)return '<p class="empty">数据还太少，多记几天就能看到曲线了</p>';
+  const W=680,H=210,padL=44,padR=16,padT=18,padB=26;
+  const vals=series.map(s=>s.v);let min=Math.min(...vals),max=Math.max(...vals);
+  if(max-min<1e-6){max+=1;min-=1}
+  const span=max-min;min-=span*0.1;max+=span*0.1;
+  const n=series.length;
+  const X=i=>padL+(n<=1?(W-padL-padR)/2:i/(n-1)*(W-padL-padR));
+  const Y=v=>padT+(1-(v-min)/(max-min))*(H-padT-padB);
+  const pts=series.map((s,i)=>`${X(i).toFixed(1)},${Y(s.v).toFixed(1)}`).join(' ');
+  const dots=series.map((s,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(s.v).toFixed(1)}" r="3" fill="${color}"/>`).join('');
+  // 移动平均（3点）
+  let avgLine='';
+  if(opts.avg&&n>=3){
+    const ma=series.map((s,i)=>{const a=Math.max(0,i-1),b=Math.min(n-1,i+1);let sum=0,c=0;for(let j=a;j<=b;j++){sum+=series[j].v;c++}return sum/c});
+    avgLine=`<polyline points="${ma.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-opacity="0.35" stroke-width="6" stroke-linejoin="round"/>`;
+  }
+  // y 轴参考线
+  const gy=[min+(max-min)*0.15,(min+max)/2,max-(max-min)*0.15];
+  const grid=gy.map(v=>`<line x1="${padL}" y1="${Y(v).toFixed(1)}" x2="${W-padR}" y2="${Y(v).toFixed(1)}" stroke="#2a2f3a" stroke-width="1"/>
+    <text x="${padL-6}" y="${(Y(v)+4).toFixed(1)}" fill="#8b93a3" font-size="11" text-anchor="end">${yfmt(v)}</text>`).join('');
+  // x 轴首末标签
+  const xl=`<text x="${padL}" y="${H-8}" fill="#8b93a3" font-size="11">${series[0].d.slice(5)}</text>
+    <text x="${W-padR}" y="${H-8}" fill="#8b93a3" font-size="11" text-anchor="end">${series[n-1].d.slice(5)}</text>`;
+  // 末点数值标签
+  const lastX=X(n-1),lastY=Y(series[n-1].v);
+  const lab=`<text x="${(lastX-6).toFixed(1)}" y="${(lastY-8).toFixed(1)}" fill="${color}" font-size="12" font-weight="700" text-anchor="end">${yfmt(series[n-1].v)}${unit}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}">${grid}${avgLine}<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>${dots}${xl}${lab}</svg>`;
+}
+function lastNDays(n){const out=[];const t=new Date();for(let i=n-1;i>=0;i--){const d=new Date(t);d.setDate(t.getDate()-i);out.push(dKey(d))}return out}
+function renderTrend(){
+  const t=trendState.tab,r=trendState.range;
+  // range buttons
+  $('trendRange').innerHTML=RANGES[t].map(x=>{
+    const lbl=x>=9999?'全部':x+'天';
+    return `<button class="${x===r?'':'ghost'}" onclick="setRange(${x})">${lbl}</button>`;
+  }).join('');
+  let html='',note='';
+  if(t==='todo'){
+    const days=lastNDays(r);const series=[];
+    days.forEach(k=>{const td=load('todos_'+k,null);if(Array.isArray(td)&&td.length){series.push({d:k,v:Math.round(td.filter(x=>x.done).length/td.length*100)})}});
+    html=lineChart(series,{color:'#6c8cff',avg:true,yfmt:v=>Math.round(v)+'%'});
+    note=series.length?'只统计有待办的日子 · 粗线为3天移动平均':'';
+  }else if(t==='abstain'){
+    const a=getAbstain();const set=new Set(a.checkedDates||[]);
+    const days=lastNDays(r);const series=[];let run=0;
+    // 用更早一天初始化 run
+    const before=dKey(new Date(new Date(days[0]).getTime()-86400000));
+    run=set.has(before)?1:0;
+    days.forEach(k=>{run=set.has(k)?run+1:0;series.push({d:k,v:run})});
+    html=lineChart(series,{color:'#34d399',yfmt:v=>Math.round(v),unit:' 天'});
+    note='每天的连续坚持天数；破戒当天归零';
+  }else if(t==='weight'){
+    let w=load('weights',[]);
+    if(r<9999){const days=new Set(lastNDays(r));w=w.filter(x=>days.has(x.d))}
+    html=lineChart(w.map(x=>({d:x.d,v:x.v})),{color:'#fbbf24',avg:true,yfmt:v=>v.toFixed(1),unit:'kg'});
+    note=w.length>=2?'粗线为3天移动平均，过滤每日波动':'';
+  }else if(t==='sleep'){
+    let log=load('sleepLog',[]);
+    if(r<9999){const days=new Set(lastNDays(r));log=log.filter(x=>days.has(x.d))}
+    const series=log.map(x=>({d:x.d,v:bedToNum(x.t)}));
+    html=lineChart(series,{color:'#a78bfa',avg:true,yfmt:numToHM});
+    note=series.length>=2?'越靠下＝睡得越早 · 在上方睡眠卡片记录每晚入睡时间':'还没有入睡记录，去上方睡眠卡片记录吧';
+  }
+  $('trendChart').innerHTML=html;$('trendNote').textContent=note;
+}
+
+/* ---------- 数据备份 ---------- */
+const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>k==='sleep'||k==='sleepLog'||k==='abstain'||k==='weights'||k==='goalWeight'||k.startsWith('todos_'));
+function exportData(){
+  const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
+  const blob=new Blob([JSON.stringify({_app:'life-planner',_date:todayKey(),data},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download='生活规划备份-'+todayKey()+'.json';a.click();URL.revokeObjectURL(url);
+}
+function importData(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const obj=JSON.parse(reader.result);
+      const data=obj.data||obj;
+      if(typeof data!=='object')throw 0;
+      if(!confirm('导入会覆盖当前同名数据，确定继续？'))return;
+      Object.keys(data).forEach(k=>localStorage.setItem(k,data[k]));
+      alert('导入成功，页面将刷新');location.reload();
+    }catch(err){alert('文件格式不对，导入失败')}
+  };
+  reader.readAsText(file);e.target.value='';
+}
+
 /* 初始化 */
-renderTodos();renderSleep();renderAbstain();renderWeight();
+renderTodos();renderSleep();renderSleepLog();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
 setInterval(renderSleep,60000);
 </script>
 </body>
