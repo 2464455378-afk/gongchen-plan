@@ -46,6 +46,9 @@
   /* 主区 */
   .main{flex:1;min-width:0;padding:0}
   .topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 30px;border-bottom:1px solid var(--line)}
+  .back-btn{font-size:13px;font-weight:700;color:var(--gold);text-decoration:none;border:1px solid var(--line-strong);
+    border-radius:20px;padding:6px 14px;white-space:nowrap;transition:background .15s}
+  .back-btn:hover{background:rgba(236,197,78,.12)}
   .crumb{font-size:13px;color:var(--muted2);letter-spacing:1px}
   .crumb b{color:var(--cream)}
   .gov-pill{font-size:12px;color:var(--gold);border:1px solid var(--line-strong);border-radius:20px;padding:6px 14px;letter-spacing:1px}
@@ -174,6 +177,7 @@
     .big{font-size:34px}
     .stage::before{font-size:200px;right:-20px}
     .topbar{padding:14px 20px}
+    .crumb{display:none}
   }
 </style>
 </head>
@@ -210,7 +214,10 @@
   <!-- 主区 -->
   <main class="main">
     <div class="topbar">
-      <div class="crumb">个人平台 / <b id="crumbSec">生活规划</b></div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <a class="back-btn" href="https://hub.gongchen.cc">‹ 返回主系统</a>
+        <div class="crumb">个人平台 / <b id="crumbSec">生活规划</b></div>
+      </div>
       <div class="gov-pill">★ 生活规划系统</div>
     </div>
     <div class="stage">
