@@ -46,9 +46,9 @@
   /* 主区 */
   .main{flex:1;min-width:0;padding:0}
   .topbar{display:flex;justify-content:space-between;align-items:center;padding:16px 30px;border-bottom:1px solid var(--line)}
-  .back-btn{font-size:13px;font-weight:700;color:var(--gold);text-decoration:none;border:1px solid var(--line-strong);
-    border-radius:20px;padding:6px 14px;white-space:nowrap;transition:background .15s}
-  .back-btn:hover{background:rgba(236,197,78,.12)}
+  .side-back{margin-top:auto;text-align:center;font-size:14px;font-weight:700;color:var(--gold);text-decoration:none;
+    border:1px solid var(--line-strong);border-radius:11px;padding:11px;transition:background .15s}
+  .side-back:hover{background:rgba(236,197,78,.12)}
   .crumb{font-size:13px;color:var(--muted2);letter-spacing:1px}
   .crumb b{color:var(--cream)}
   .gov-pill{font-size:12px;color:var(--gold);border:1px solid var(--line-strong);border-radius:20px;padding:6px 14px;letter-spacing:1px}
@@ -208,16 +208,14 @@
       <div class="nav-item" data-s="stats" onclick="showSection('stats')"><span class="st">★</span><span><b>数据统计</b><i>日历 · 趋势</i></span></div>
       <div class="nav-item" data-s="backup" onclick="showSection('backup')"><span class="st">★</span><span><b>数据备份</b><i>导出 · 导入</i></span></div>
     </nav>
+    <a class="side-back" href="https://hub.gongchen.cc">‹ 返回主系统</a>
     <div class="motto">「 自律者，得自由 」</div>
   </aside>
 
   <!-- 主区 -->
   <main class="main">
     <div class="topbar">
-      <div style="display:flex;align-items:center;gap:14px">
-        <a class="back-btn" href="https://hub.gongchen.cc">‹ 返回主系统</a>
-        <div class="crumb">个人平台 / <b id="crumbSec">生活规划</b></div>
-      </div>
+      <div class="crumb">个人平台 / <b id="crumbSec">生活规划</b></div>
       <div class="gov-pill">★ 生活规划系统</div>
     </div>
     <div class="stage">
