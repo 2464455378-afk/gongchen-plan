@@ -128,6 +128,19 @@
   .pbar>i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-deep),var(--gold-2));border-radius:6px}
   .goal input[type=range]{width:100%;accent-color:var(--gold);padding:0}
   .goal-note{font-size:12px;color:var(--muted2);margin-top:8px;white-space:pre-wrap}
+  .subs{margin-top:10px}
+  .sub{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--line)}
+  .sub:last-child{border-bottom:none}
+  .sub .cb{width:18px;height:18px;border:2px solid var(--muted2);border-radius:5px;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:12px;color:transparent}
+  .sub.done .cb{background:var(--gold);border-color:var(--gold);color:#4a0a0a}
+  .sub.done span{text-decoration:line-through;color:var(--dim)}
+  .sub span{flex:1;font-size:13px;color:var(--cream)}
+  .sub-add{display:flex;gap:8px;margin-top:10px}
+  .sub-add input{flex:1}
+  .draft-sub{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;color:var(--cream);border-bottom:1px solid var(--line)}
+  .draft-sub:last-child{border-bottom:none}
+  .draft-sub span{flex:1}
   /* 减肥 */
   .weight-stats{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
   .stat{flex:1;min-width:88px;background:var(--card-2);border-radius:10px;padding:10px 12px;border:1px solid var(--line)}
@@ -336,11 +349,11 @@
       <section id="sec-goals" class="section">
         <div class="eyebrow">★ 长期规划 · LONG-TERM</div>
         <h1 class="big">LONG-TERM</h1>
-        <p class="lead">设定带截止日期的长期目标，跟踪进度与剩余时间。</p>
+        <p class="lead">设定一个大目标，拆成多个小目标逐步推进；进度按完成的小目标自动统计。</p>
         <div class="card">
-          <h2>🎯 新增目标 <span class="en">ADD GOAL</span></h2>
+          <h2>🎯 新增大目标 <span class="en">ADD GOAL</span></h2>
           <div class="add-row">
-            <input id="goalName" placeholder="目标名称，例如：考过 CFA 一级">
+            <input id="goalName" placeholder="大目标名称，例如：考过 CFA 一级">
             <select id="goalCat">
               <option value="life">生活</option>
               <option value="study">学习</option>
@@ -349,10 +362,19 @@
             </select>
           </div>
           <div class="add-row">
-            <div class="field"><label>目标日期</label><input type="date" id="goalDue"></div>
-            <div class="field" style="flex:2"><label>备注（可选）</label><input id="goalNote" placeholder="拆解步骤、动机…"></div>
-            <button onclick="addGoal()" style="align-self:flex-end">创建</button>
+            <div class="field"><label>目标日期</label><input type="date" id="goalStart"></div>
+            <div class="field"><label>截止日期</label><input type="date" id="goalDue"></div>
+            <div class="field" style="flex:2"><label>备注（可选）</label><input id="goalNote" placeholder="动机、说明…"></div>
           </div>
+          <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:14px">
+            <label style="font-size:12px;color:var(--muted2);display:block;margin-bottom:8px">小目标（可加多个，作为这个大目标的拆解步骤）</label>
+            <div class="add-row">
+              <input id="subInput" placeholder="一个小目标 / 里程碑，回车添加…" onkeydown="if(event.key==='Enter')addDraftSub()">
+              <button class="ghost" onclick="addDraftSub()">添加小目标</button>
+            </div>
+            <div id="draftSubList"></div>
+          </div>
+          <div style="text-align:right;margin-top:14px"><button onclick="addGoal()">创建大目标</button></div>
         </div>
         <div class="card">
           <h2>📌 目标清单 <span class="en">GOALS</span></h2>
@@ -705,11 +727,22 @@ function renderHabits(){
 
 /* ---------- 长期规划 ---------- */
 const GCAT={life:'生活',study:'学习',work:'工作',other:'其他'};
+let draftSubs=[];
+function addDraftSub(){
+  const v=$('subInput').value.trim();if(!v)return;
+  draftSubs.push({id:uid(),text:v,done:false});$('subInput').value='';renderDraftSubs();
+}
+function removeDraftSub(i){draftSubs.splice(i,1);renderDraftSubs()}
+function renderDraftSubs(){
+  $('draftSubList').innerHTML=draftSubs.map((s,i)=>`<div class="draft-sub"><span>· ${escapeHtml(s.text)}</span><button class="del" onclick="removeDraftSub(${i})">×</button></div>`).join('');
+}
 function addGoal(){
-  const name=$('goalName').value.trim();if(!name){alert('请填目标名称');return}
+  const name=$('goalName').value.trim();if(!name){alert('请填大目标名称');return}
   const g=load('goals',[]);
-  g.push({id:uid(),name,cat:$('goalCat').value,due:$('goalDue').value||'',progress:0,note:$('goalNote').value.trim()});
-  save('goals',g);$('goalName').value='';$('goalNote').value='';$('goalDue').value='';renderGoals();
+  g.push({id:uid(),name,cat:$('goalCat').value,start:$('goalStart').value||'',due:$('goalDue').value||'',note:$('goalNote').value.trim(),subs:draftSubs.slice(),progress:0});
+  save('goals',g);
+  $('goalName').value='';$('goalNote').value='';$('goalStart').value='';$('goalDue').value='';
+  draftSubs=[];renderDraftSubs();renderGoals();
 }
 function setGoalProgress(id,v){
   const g=load('goals',[]);const it=g.find(x=>x.id===id);if(!it)return;
@@ -717,29 +750,55 @@ function setGoalProgress(id,v){
   const lab=document.querySelector(`#goal-${id} .pct`);if(lab)lab.textContent=v+'%';
   const bar=document.querySelector(`#goal-${id} .pbar>i`);if(bar)bar.style.width=v+'%';
 }
-function delGoal(id){if(!confirm('删除这个目标？'))return;save('goals',load('goals',[]).filter(x=>x.id!==id));renderGoals()}
-function daysLeft(due){
-  if(!due)return null;
-  return Math.ceil((new Date(due)-new Date(todayKey()))/86400000);
+function toggleSub(gid,sid){
+  const g=load('goals',[]);const it=g.find(x=>x.id===gid);if(!it||!it.subs)return;
+  const s=it.subs.find(x=>x.id===sid);if(!s)return;s.done=!s.done;save('goals',g);renderGoals();
+}
+function addSubToGoal(gid){
+  const inp=$('sub-input-'+gid);const v=inp.value.trim();if(!v)return;
+  const g=load('goals',[]);const it=g.find(x=>x.id===gid);if(!it)return;
+  if(!it.subs)it.subs=[];it.subs.push({id:uid(),text:v,done:false});save('goals',g);renderGoals();
+}
+function delSub(gid,sid){
+  const g=load('goals',[]);const it=g.find(x=>x.id===gid);if(!it||!it.subs)return;
+  it.subs=it.subs.filter(x=>x.id!==sid);save('goals',g);renderGoals();
+}
+function delGoal(id){if(!confirm('删除这个大目标？小目标也会一起删除'))return;save('goals',load('goals',[]).filter(x=>x.id!==id));renderGoals()}
+function daysLeft(due){if(!due)return null;return dayDiff(todayKey(),due)}
+function goalPct(it){
+  const subs=it.subs||[];
+  if(subs.length)return Math.round(subs.filter(s=>s.done).length/subs.length*100);
+  return it.progress||0;
 }
 function renderGoals(){
   const g=load('goals',[]);const wrap=$('goalList');
-  if(!g.length){wrap.innerHTML='<p class="empty">还没有长期目标，去上面创建一个</p>';return}
-  g.sort((a,b)=>(a.due||'9999')<(b.due||'9999')?-1:1);
+  if(!g.length){wrap.innerHTML='<p class="empty">还没有大目标，去上面创建一个</p>';return}
+  g.sort((a,b)=>((a.due||a.start||'9999')<(b.due||b.start||'9999')?-1:1));
   wrap.innerHTML=g.map(it=>{
-    const dl=daysLeft(it.due);
-    let meta='';
-    if(it.due){
-      meta=dl>=0?`目标日 ${it.due} · <span class="days">剩 ${dl} 天</span>`:`目标日 ${it.due} · <span class="over">已超期 ${-dl} 天</span>`;
-    }else meta='未设定目标日期';
+    const subs=it.subs||[];const done=subs.filter(s=>s.done).length;const pct=goalPct(it);
+    const parts=[];
+    if(it.start)parts.push('目标日 '+it.start);
+    if(it.due){const dl=daysLeft(it.due);parts.push('截止 '+it.due+(dl>=0?` · <span class="days">剩 ${dl} 天</span>`:` · <span class="over">已超期 ${-dl} 天</span>`));}
+    if(!parts.length)parts.push('未设日期');
+    const subsHtml=subs.length?`<div class="subs">${subs.map(s=>`
+      <div class="sub ${s.done?'done':''}">
+        <div class="cb" onclick="toggleSub('${it.id}','${s.id}')">✓</div>
+        <span>${escapeHtml(s.text)}</span>
+        <button class="del" onclick="delSub('${it.id}','${s.id}')">×</button>
+      </div>`).join('')}</div>`:'';
+    const slider=subs.length?'':`<input type="range" min="0" max="100" value="${it.progress||0}" oninput="setGoalProgress('${it.id}',this.value)">`;
     return `<div class="goal" id="goal-${it.id}">
       <div class="goal-top">
         <div><span class="goal-tag">${GCAT[it.cat]||'其他'}</span><span class="goal-name">${escapeHtml(it.name)}</span></div>
         <button class="del" onclick="delGoal('${it.id}')">×</button>
       </div>
-      <div class="goal-meta">${meta} · 进度 <span class="pct">${it.progress}%</span></div>
-      <div class="pbar"><i style="width:${it.progress}%"></i></div>
-      <input type="range" min="0" max="100" value="${it.progress}" oninput="setGoalProgress('${it.id}',this.value)">
+      <div class="goal-meta">${parts.join(' · ')} · 进度 <span class="pct">${pct}%</span>${subs.length?` · ${done}/${subs.length} 小目标`:''}</div>
+      <div class="pbar"><i style="width:${pct}%"></i></div>
+      ${slider}${subsHtml}
+      <div class="sub-add">
+        <input id="sub-input-${it.id}" placeholder="给这个大目标加一个小目标…" onkeydown="if(event.key==='Enter')addSubToGoal('${it.id}')">
+        <button class="ghost sm" onclick="addSubToGoal('${it.id}')">加小目标</button>
+      </div>
       ${it.note?`<div class="goal-note">${escapeHtml(it.note)}</div>`:''}
     </div>`;
   }).join('');
