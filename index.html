@@ -489,6 +489,22 @@
           </div>
           <p class="hint">导出文件名形如「生活规划备份-日期.json」，妥善保存即可随时恢复全部记录。</p>
         </div>
+
+        <div class="card">
+          <h2>☁️ 云端同步 <span class="en">CLOUD SYNC</span></h2>
+          <p class="hint" id="syncStatus" style="margin:0 0 12px"></p>
+          <div class="add-row">
+            <input id="syncKeyInput" placeholder="同步密钥（所有设备填同一串）">
+            <button onclick="genSyncKey()">生成</button>
+            <button onclick="enableSync()">开启同步</button>
+          </div>
+          <div class="backup-row" id="syncActions" style="display:none">
+            <button onclick="manualPush()">⬆ 上传到云端</button>
+            <button class="ghost" onclick="manualPull()">⬇ 从云端拉取</button>
+            <button class="ghost" onclick="disableSync()">关闭同步</button>
+          </div>
+          <p class="hint">开启后数据改动会自动同步到云端。换设备或清缓存后，在新设备填同一串密钥点「从云端拉取」即可恢复。密钥即权限，请妥善保管、勿外泄。</p>
+        </div>
       </section>
 
     </div>
@@ -502,7 +518,8 @@ const dKey=d=>d.toLocaleDateString('sv');
 const parseLocal=key=>{const[y,m,d]=key.split('-').map(Number);return new Date(y,m-1,d)};
 const addDays=(key,n)=>{const d=parseLocal(key);d.setDate(d.getDate()+n);return dKey(d)};
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}};
-const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+let applyingCloud=false,pushTimer=null;
+function save(k,v){localStorage.setItem(k,JSON.stringify(v));if(!applyingCloud)schedulePush();}
 const escapeHtml=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
@@ -987,10 +1004,96 @@ function importData(e){
   reader.readAsText(file);e.target.value='';
 }
 
+/* ---------- 云端同步（Cloudflare KV）---------- */
+const SYNC_API='/api/data';
+const getSyncKey=()=>localStorage.getItem('_syncKey')||'';
+function genSyncKey(){
+  const cs='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  let s='';const a=crypto.getRandomValues(new Uint32Array(24));
+  for(let i=0;i<24;i++)s+=cs[a[i]%cs.length];
+  $('syncKeyInput').value=s;
+}
+function schedulePush(){if(!getSyncKey())return;clearTimeout(pushTimer);pushTimer=setTimeout(cloudPush,1500)}
+async function cloudGet(key){
+  const r=await fetch(SYNC_API+'?key='+encodeURIComponent(key));
+  if(!r.ok)throw new Error('get failed');
+  return r.json();
+}
+async function cloudPush(){
+  const key=getSyncKey();if(!key)return;
+  const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
+  const ts=Date.now();
+  try{
+    const r=await fetch(SYNC_API+'?key='+encodeURIComponent(key),{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data,ts})});
+    if(r.ok){localStorage.setItem('_syncTs',String(ts));updateSyncUI('已同步');}
+    else updateSyncUI('同步失败');
+  }catch(e){updateSyncUI('离线，稍后重试');}
+}
+function applyCloud(cloud){
+  applyingCloud=true;
+  BACKUP_KEYS().forEach(k=>localStorage.removeItem(k));
+  Object.keys(cloud.data||{}).forEach(k=>{if(cloud.data[k]!=null)localStorage.setItem(k,cloud.data[k])});
+  localStorage.setItem('_syncTs',String(cloud.ts||Date.now()));
+  applyingCloud=false;
+  todosDay=todayKey();todos=load('todos_'+todosDay,[]);
+  rerenderAll();
+}
+function rerenderAll(){
+  renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();
+  renderAbstain();renderWeight();renderCal();renderReview();renderTrend();renderFinance();
+}
+async function enableSync(){
+  const key=$('syncKeyInput').value.trim();
+  if(key.length<8){alert('密钥至少 8 位，建议点「生成」用随机串');return}
+  localStorage.setItem('_syncKey',key);
+  let cloud=null;
+  try{cloud=await cloudGet(key)}catch(e){alert('连不上云端（后端可能还没部署好），已保存密钥，稍后再试');updateSyncUI();return}
+  const hasCloud=cloud&&cloud.data&&Object.keys(cloud.data).length;
+  const hasLocal=BACKUP_KEYS().length>0;
+  if(hasCloud&&hasLocal){
+    if(confirm('云端已有数据。\n点「确定」＝用云端数据覆盖本机\n点「取消」＝用本机数据覆盖云端'))applyCloud(cloud);
+    else await cloudPush();
+  }else if(hasCloud)applyCloud(cloud);
+  else await cloudPush();
+  updateSyncUI('已开启');
+}
+async function manualPush(){await cloudPush();alert('已上传到云端')}
+async function manualPull(){
+  const key=getSyncKey();if(!key)return;
+  let cloud;try{cloud=await cloudGet(key)}catch(e){alert('连不上云端');return}
+  if(!cloud||!cloud.data||!Object.keys(cloud.data).length){alert('云端暂无数据');return}
+  if(confirm('用云端数据覆盖本机当前数据？'))applyCloud(cloud);
+}
+function disableSync(){
+  if(!confirm('关闭云端同步？本机数据保留，但不再自动上传'))return;
+  localStorage.removeItem('_syncKey');updateSyncUI();
+}
+function updateSyncUI(msg){
+  const key=getSyncKey();
+  $('syncActions').style.display=key?'flex':'none';
+  if(key)$('syncKeyInput').value=key;
+  const ts=+(localStorage.getItem('_syncTs')||0);
+  if(key){
+    const when=ts?new Date(ts).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'尚未同步';
+    $('syncStatus').textContent=`已开启 · ${msg||'最近同步：'+when}`;
+  }else $('syncStatus').textContent='未开启 · 填入或生成同步密钥后开启';
+}
+async function cloudSyncOnLoad(){
+  const key=getSyncKey();if(!key){updateSyncUI();return}
+  try{
+    const cloud=await cloudGet(key);
+    const localTs=+(localStorage.getItem('_syncTs')||0);
+    if(cloud&&cloud.data&&(+cloud.ts||0)>localTs)applyCloud(cloud);
+    else await cloudPush();
+  }catch(e){}
+  updateSyncUI();
+}
+
 /* ---------- 初始化 ---------- */
 $('todayLead').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})+' · 今天要完成的事，以及今晚的作息安排。';
 renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
 setTxType('expense');renderFinance();
+updateSyncUI();cloudSyncOnLoad();
 setInterval(renderSleep,60000);
 </script>
 </body>
