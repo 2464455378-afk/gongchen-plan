@@ -1044,7 +1044,7 @@ const INC_CATS=['工资','兼职','理财','红包','报销','其他'];
 let txType='expense';
 const CUR_SYM={CNY:'¥',USD:'$'};
 const sym=c=>CUR_SYM[c]||'¥';
-const fmtC=(n,c)=>sym(c)+(Number(n)||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtC=(n,c)=>{const v=Number(n)||0;return (v<0?'-':'')+sym(c)+Math.abs(v).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})};
 const getBudgetCur=()=>{try{return JSON.parse(localStorage.getItem('fin_budgetCur'))||'CNY'}catch(e){return 'CNY'}};
 const getLastCur=()=>{try{return JSON.parse(localStorage.getItem('fin_lastCur'))||'CNY'}catch(e){return 'CNY'}};
 function sumByCur(list,getter){const o={};list.forEach(x=>{const c=x.cur||'CNY';o[c]=(o[c]||0)+(+getter(x)||0)});return o;}
