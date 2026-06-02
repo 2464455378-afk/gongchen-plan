@@ -454,7 +454,12 @@
         </div>
 
         <div class="card">
-          <h2>📊 本月支出构成 <span class="en">BY CATEGORY</span></h2>
+          <h2>📊 支出构成 <span class="en">BY CATEGORY</span></h2>
+          <div class="seg" id="catPeriodSeg" style="margin-bottom:14px">
+            <button data-p="month" class="on" onclick="setCatPeriod('month')">本月</button>
+            <button data-p="quarter" onclick="setCatPeriod('quarter')">本季度</button>
+            <button data-p="year" onclick="setCatPeriod('year')">本年</button>
+          </div>
           <div id="catBreakdown"></div>
         </div>
 
@@ -1107,7 +1112,7 @@ function renderFinance(){
     const avg=monthExpBC/dayNum;const proj=avg*dim;
     $('finBudgetNote').textContent=`统计货币 ${bsym} · 日均 ${fmtC(avg,bc)} · 本月预计 ${fmtC(proj,bc)}`+(monthExpBC>budget?' · 已超预算':` · 剩 ${fmtC(remain,bc)}`);
   }else $('finBudgetNote').textContent=`预算与下方统计图按「统计货币 ${bsym}」计算（仅统计 ${bsym} 的支出）。设置预算后显示进度与预测。`;
-  renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,mk,bc);
+  renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,bc);
   const series=[];
   for(let d=1;d<=td;d++){const key=`${ty}-${String(tm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;series.push({d:key,v:tx.filter(t=>t.type==='expense'&&t.date===key&&(t.cur||'CNY')===bc).reduce((s,t)=>s+t.amount,0)})}
   $('spendChart').innerHTML=finBarChart(series);
@@ -1127,16 +1132,28 @@ function renderAccounts(acc){
   if(!acc.length){el.innerHTML='<p class="empty">添加账户以统计总资产</p>';return}
   el.innerHTML=acc.map(a=>`<div class="acct"><span class="an">${escapeHtml(a.name)}</span><span class="ab">${fmtC(a.balance,a.cur)}</span><button class="del" onclick="delAccount('${a.id}')">×</button></div>`).join('');
 }
-function renderCatBreakdown(tx,mk,bc){
-  const exp=tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk&&(t.cur||'CNY')===bc);
+let catPeriod='month';
+const CAT_PERIOD_LABEL={month:'本月',quarter:'本季度',year:'本年'};
+function setCatPeriod(p){catPeriod=p;document.querySelectorAll('#catPeriodSeg button').forEach(b=>b.classList.toggle('on',b.dataset.p===p));renderFinance();}
+function inCatPeriod(dateStr){
+  const[ty,tm]=todayKey().split('-').map(Number);
+  const dy=+dateStr.slice(0,4),dm=+dateStr.slice(5,7);
+  if(catPeriod==='year')return dy===ty;
+  if(catPeriod==='quarter'){const qs=Math.floor((tm-1)/3)*3+1;return dy===ty&&dm>=qs&&dm<=qs+2;}
+  return dateStr.slice(0,7)===todayKey().slice(0,7);
+}
+function renderCatBreakdown(tx,bc){
+  const lbl=CAT_PERIOD_LABEL[catPeriod];
+  const exp=tx.filter(t=>t.type==='expense'&&inCatPeriod(t.date)&&(t.cur||'CNY')===bc);
   const el=$('catBreakdown');
-  if(!exp.length){el.innerHTML=`<p class="empty">本月还没有 ${sym(bc)} 支出记录</p>`;return}
+  if(!exp.length){el.innerHTML=`<p class="empty">${lbl}还没有 ${sym(bc)} 支出记录</p>`;return}
   const by={};exp.forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
   const total=Object.values(by).reduce((s,v)=>s+v,0);
-  el.innerHTML=Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{
+  const rows=Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{
     const p=Math.round(v/total*100);
     return `<div class="catbar"><div class="top"><span class="c">${escapeHtml(c)}</span><span class="m">${fmtC(v,bc)} · ${p}%</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
   }).join('');
+  el.innerHTML=`<p class="hint" style="margin:-2px 0 12px">${lbl}支出合计 ${fmtC(total,bc)}</p>${rows}`;
 }
 
 /* ---------- 数据备份 ---------- */
