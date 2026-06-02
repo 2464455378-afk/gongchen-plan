@@ -275,6 +275,16 @@
           </div>
           <p class="hint" id="sleepLogInfo"></p>
         </div>
+
+        <div class="card">
+          <h2>🌅 明日计划 <span class="en">TOMORROW</span></h2>
+          <div class="add-row">
+            <input id="planInput" placeholder="为明天列一项，回车确认…">
+            <button onclick="addPlan()">添加</button>
+          </div>
+          <ul id="planList"></ul>
+          <p class="hint" id="planHint"></p>
+        </div>
       </section>
 
       <!-- 习惯养成 -->
@@ -484,6 +494,8 @@
 const $=id=>document.getElementById(id);
 const todayKey=()=>new Date().toLocaleDateString('sv');
 const dKey=d=>d.toLocaleDateString('sv');
+const parseLocal=key=>{const[y,m,d]=key.split('-').map(Number);return new Date(y,m-1,d)};
+const addDays=(key,n)=>{const d=parseLocal(key);d.setDate(d.getDate()+n);return dKey(d)};
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}};
 const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const escapeHtml=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -499,8 +511,11 @@ function showSection(s){
 }
 
 /* ---------- 待办 ---------- */
-let todos=load('todos_'+todayKey(),[]);
+let todosDay=todayKey();
+let todos=load('todos_'+todosDay,[]);
+function ensureTodayTodos(){const k=todayKey();if(k!==todosDay){todosDay=k;todos=load('todos_'+k,[])}}
 function renderTodos(){
+  ensureTodayTodos();
   const el=$('todoList');
   if(!todos.length){el.innerHTML='<p class="empty">还没有待办，加一个吧</p>';return}
   el.innerHTML=todos.map((t,i)=>`
@@ -510,11 +525,31 @@ function renderTodos(){
       <button class="del" onclick="delTodo(${i})">×</button>
     </li>`).join('');
 }
-function addTodo(){const v=$('todoInput').value.trim();if(!v)return;todos.push({text:v,done:false});$('todoInput').value='';persistTodos()}
-function toggleTodo(i){todos[i].done=!todos[i].done;persistTodos()}
-function delTodo(i){todos.splice(i,1);persistTodos()}
-function persistTodos(){save('todos_'+todayKey(),todos);renderTodos();renderCal();renderReview();renderTrend()}
+function addTodo(){ensureTodayTodos();const v=$('todoInput').value.trim();if(!v)return;todos.push({text:v,done:false});$('todoInput').value='';persistTodos()}
+function toggleTodo(i){ensureTodayTodos();todos[i].done=!todos[i].done;persistTodos()}
+function delTodo(i){ensureTodayTodos();todos.splice(i,1);persistTodos()}
+function persistTodos(){save('todos_'+todosDay,todos);renderTodos();renderCal();renderReview();renderTrend()}
 $('todoInput').addEventListener('keydown',e=>{if(e.key==='Enter')addTodo()});
+
+/* ---------- 明日计划（写入明天的待办，次日自动出现在当日待办）---------- */
+const tomorrowKey=()=>addDays(todayKey(),1);
+const loadPlan=()=>load('todos_'+tomorrowKey(),[]);
+function renderPlan(){
+  const list=loadPlan();const el=$('planList');
+  if(!list.length){el.innerHTML='<p class="empty">还没安排明天，先列几项</p>';}
+  else el.innerHTML=list.map((t,i)=>`
+    <li class="todo-item">
+      <div class="cb" style="cursor:default;border-style:dashed"></div>
+      <span>${escapeHtml(t.text)}</span>
+      <button class="del" onclick="delPlan(${i})">×</button>
+    </li>`).join('');
+  $('planHint').textContent=list.length
+    ?`明天（${tomorrowKey().slice(5)}）已排 ${list.length} 项，到了明天会自动出现在「当日待办」`
+    :'今晚列好明天要做的事，第二天自动同步到当日待办';
+}
+function addPlan(){const v=$('planInput').value.trim();if(!v)return;const list=loadPlan();list.push({text:v,done:false});save('todos_'+tomorrowKey(),list);$('planInput').value='';renderPlan()}
+function delPlan(i){const list=loadPlan();list.splice(i,1);save('todos_'+tomorrowKey(),list);renderPlan()}
+$('planInput').addEventListener('keydown',e=>{if(e.key==='Enter')addPlan()});
 
 /* ---------- 睡眠 ---------- */
 function saveSleep(){save('sleep',{bed:$('bedTime').value,hrs:$('sleepHours').value});renderSleep()}
@@ -548,7 +583,7 @@ function renderSleepLog(){
 /* ---------- 习惯 ---------- */
 const HCATS=[['life','生活习惯','LIFE'],['study','学习习惯','STUDY'],['work','工作习惯','WORK']];
 function streakOf(dates){
-  const set=new Set(dates);let s=0;let d=new Date(todayKey());
+  const set=new Set(dates);let s=0;let d=parseLocal(todayKey());
   if(!set.has(dKey(d)))d.setDate(d.getDate()-1);
   while(set.has(dKey(d))){s++;d.setDate(d.getDate()-1)}
   return s;
@@ -661,7 +696,7 @@ function resetAbstain(){
 
 /* ---------- 减肥 ---------- */
 function addWeight(){
-  const v=parseFloat($('weightInput').value);if(!v)return;
+  const v=parseFloat($('weightInput').value);if(!v||v<=0){alert('请输入有效体重');return}
   const w=load('weights',[]);const k=todayKey();const idx=w.findIndex(x=>x.d===k);
   if(idx>=0)w[idx].v=v;else w.push({d:k,v});
   w.sort((a,b)=>a.d<b.d?-1:1);save('weights',w);$('weightInput').value='';
@@ -788,7 +823,7 @@ function renderTrend(){
     html=lineChart(series,{color:'#ecc54e',avg:true,yfmt:v=>Math.round(v)+'%'});note=series.length?'只统计有待办的日子 · 粗线为3天移动平均':'';
   }else if(t==='abstain'){
     const a=getAbstain();const set=new Set(a.checkedDates||[]);const days=lastNDays(r);const series=[];
-    let run=set.has(dKey(new Date(new Date(days[0]).getTime()-86400000)))?1:0;
+    let run=set.has(addDays(days[0],-1))?1:0;
     days.forEach(k=>{run=set.has(k)?run+1:0;series.push({d:k,v:run})});
     html=lineChart(series,{color:'#7fce9e',yfmt:v=>Math.round(v),unit:' 天'});note='每天的连续坚持天数；破戒当天归零';
   }else if(t==='weight'){
@@ -918,7 +953,7 @@ function importData(e){
 
 /* ---------- 初始化 ---------- */
 $('todayLead').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})+' · 今天要完成的事，以及今晚的作息安排。';
-renderTodos();renderSleep();renderSleepLog();renderHabits();renderGoals();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
+renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
 setTxType('expense');renderFinance();
 setInterval(renderSleep,60000);
 </script>
