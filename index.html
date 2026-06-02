@@ -228,6 +228,7 @@
     <div class="nav-label">规 划 板 块</div>
     <nav class="nav" id="nav">
       <div class="nav-item active" data-s="today" onclick="showSection('today')"><span class="st">★</span><span><b>今日</b><i>待办 · 作息</i></span></div>
+      <div class="nav-item" data-s="tomorrow" onclick="showSection('tomorrow')"><span class="st">★</span><span><b>明日计划</b><i>为明天做准备</i></span></div>
       <div class="nav-item" data-s="habits" onclick="showSection('habits')"><span class="st">★</span><span><b>习惯养成</b><i>生活 · 学习 · 工作</i></span></div>
       <div class="nav-item" data-s="goals" onclick="showSection('goals')"><span class="st">★</span><span><b>长期规划</b><i>目标 · 进度</i></span></div>
       <div class="nav-item" data-s="finance" onclick="showSection('finance')"><span class="st">★</span><span><b>财务管理</b><i>资产 · 记账 · 预算</i></span></div>
@@ -252,6 +253,16 @@
         <div class="eyebrow">★ 今日 · TODAY</div>
         <h1 class="big">TODAY</h1>
         <p class="lead" id="todayLead">今天要完成的事，以及今晚的作息安排。</p>
+        <div style="margin:-14px 0 22px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted2)">所在时区</span>
+          <select id="tzSelect" onchange="saveTz()" style="width:auto">
+            <option value="">自动（跟随设备）</option>
+            <option value="America/Los_Angeles">洛杉矶 · 太平洋时间</option>
+            <option value="America/Chicago">圣路易斯 · 中部时间</option>
+            <option value="America/New_York">纽约 · 东部时间</option>
+            <option value="Asia/Shanghai">北京 · 中国时间</option>
+          </select>
+        </div>
 
         <div class="card">
           <h2>📋 当日待办 <span class="en">TO-DO</span></h2>
@@ -275,7 +286,13 @@
           </div>
           <p class="hint" id="sleepLogInfo"></p>
         </div>
+      </section>
 
+      <!-- 明日计划 -->
+      <section id="sec-tomorrow" class="section">
+        <div class="eyebrow">★ 明日计划 · TOMORROW</div>
+        <h1 class="big">TOMORROW</h1>
+        <p class="lead">晚上把明天要做的列在这里，第二天会自动出现在「今日 · 当日待办」。</p>
         <div class="card">
           <h2>🌅 明日计划 <span class="en">TOMORROW</span></h2>
           <div class="add-row">
@@ -513,7 +530,8 @@
 
 <script>
 const $=id=>document.getElementById(id);
-const todayKey=()=>new Date().toLocaleDateString('sv');
+const getTZ=()=>{try{return JSON.parse(localStorage.getItem('tz'))||''}catch(e){return ''}};
+const todayKey=()=>new Date().toLocaleDateString('sv',getTZ()?{timeZone:getTZ()}:undefined);
 const dKey=d=>d.toLocaleDateString('sv');
 const parseLocal=key=>{const[y,m,d]=key.split('-').map(Number);return new Date(y,m-1,d)};
 const addDays=(key,n)=>{const d=parseLocal(key);d.setDate(d.getDate()+n);return dKey(d)};
@@ -524,7 +542,17 @@ const escapeHtml=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
 /* ---------- 区块切换 ---------- */
-const SEC_NAME={today:'今日',habits:'习惯养成',goals:'长期规划',finance:'财务管理',discipline:'自律',stats:'数据统计',backup:'数据备份'};
+const SEC_NAME={today:'今日',tomorrow:'明日计划',habits:'习惯养成',goals:'长期规划',finance:'财务管理',discipline:'自律',stats:'数据统计',backup:'数据备份'};
+function renderTodayLead(){
+  const opt={year:'numeric',month:'long',day:'numeric',weekday:'long'};
+  if(getTZ())opt.timeZone=getTZ();
+  $('todayLead').textContent=new Date().toLocaleDateString('zh-CN',opt)+' · 今天要完成的事，以及今晚的作息安排。';
+}
+function saveTz(){
+  save('tz',$('tzSelect').value);
+  todosDay=todayKey();todos=load('todos_'+todosDay,[]);
+  renderTodayLead();rerenderAll();
+}
 function showSection(s){
   document.querySelectorAll('.section').forEach(el=>el.classList.toggle('active',el.id==='sec-'+s));
   document.querySelectorAll('#nav .nav-item').forEach(el=>el.classList.toggle('active',el.dataset.s===s));
@@ -809,10 +837,10 @@ function renderCal(){
 
 /* ---------- 周回顾 ---------- */
 function renderReview(){
-  const today=new Date();let abstainDays=0,weightDays=0,todoDone=0,todoTotal=0;
+  let abstainDays=0,weightDays=0,todoDone=0,todoTotal=0;
   const a=getAbstain();const w=load('weights',[]);const last7=[];
   for(let i=0;i<7;i++){
-    const d=new Date(today);d.setDate(today.getDate()-i);const key=dKey(d);last7.push(key);
+    const key=addDays(todayKey(),-i);last7.push(key);
     if(a.checkedDates&&a.checkedDates.includes(key))abstainDays++;
     if(w.some(x=>x.d===key))weightDays++;
     const td=load('todos_'+key,null);
@@ -866,7 +894,7 @@ function lineChart(series,opts={}){
   const lab=`<text x="${(X(n-1)-6).toFixed(1)}" y="${(Y(series[n-1].v)-8).toFixed(1)}" fill="${color}" font-size="12" font-weight="700" text-anchor="end">${yfmt(series[n-1].v)}${unit}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}">${grid}${avgLine}<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>${dots}${xl}${lab}</svg>`;
 }
-function lastNDays(n){const out=[];const t=new Date();for(let i=n-1;i>=0;i--){const d=new Date(t);d.setDate(t.getDate()-i);out.push(dKey(d))}return out}
+function lastNDays(n){const out=[];for(let i=n-1;i>=0;i--)out.push(addDays(todayKey(),-i));return out}
 function renderTrend(){
   const t=trendState.tab,r=trendState.range;
   $('trendRange').innerHTML=RANGES[t].map(x=>{const lbl=x>=9999?'全部':x+'天';return `<button class="${x===r?'':'ghost'}" onclick="setRange(${x})">${lbl}</button>`}).join('');
@@ -983,7 +1011,7 @@ function renderCatBreakdown(tx,mk){
 }
 
 /* ---------- 数据备份 ---------- */
-const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['sleep','sleepLog','abstain','weights','goalWeight','habits','goals','fin_tx','fin_accounts','fin_budget'].includes(k)||k.startsWith('todos_'));
+const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','fin_tx','fin_accounts','fin_budget'].includes(k)||k.startsWith('todos_'));
 function exportData(){
   const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
   const blob=new Blob([JSON.stringify({_app:'life-planner',_date:todayKey(),data},null,2)],{type:'application/json'});
@@ -1039,6 +1067,8 @@ function applyCloud(cloud){
   rerenderAll();
 }
 function rerenderAll(){
+  if($('tzSelect'))$('tzSelect').value=getTZ();
+  if(typeof renderTodayLead==='function')renderTodayLead();
   renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();
   renderAbstain();renderWeight();renderCal();renderReview();renderTrend();renderFinance();
 }
@@ -1090,7 +1120,7 @@ async function cloudSyncOnLoad(){
 }
 
 /* ---------- 初始化 ---------- */
-$('todayLead').textContent=new Date().toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'})+' · 今天要完成的事，以及今晚的作息安排。';
+$('tzSelect').value=getTZ();renderTodayLead();
 renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
 setTxType('expense');renderFinance();
 updateSyncUI();cloudSyncOnLoad();
