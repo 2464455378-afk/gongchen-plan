@@ -401,6 +401,13 @@
         <div class="eyebrow">★ 财务管理 · FINANCE</div>
         <h1 class="big">FINANCE</h1>
         <p class="lead">记录每天的开销与收入，掌握总资产，盯紧每月预算。</p>
+        <div style="margin:-14px 0 22px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted2)">货币单位</span>
+          <select id="curSelect" onchange="saveCurrency()" style="width:auto">
+            <option value="CNY">人民币 ¥</option>
+            <option value="USD">美元 $</option>
+          </select>
+        </div>
 
         <div class="card">
           <h2>💰 财务总览 <span class="en">OVERVIEW</span></h2>
@@ -413,7 +420,7 @@
           <div class="pbar"><i id="finBudgetBar" style="width:0%"></i></div>
           <p class="hint" id="finBudgetNote"></p>
           <div class="row" style="margin-top:12px">
-            <div class="field"><label>本月预算 (¥)</label><input type="number" id="finBudget" step="100" onchange="saveBudget()" placeholder="如 3000"></div>
+            <div class="field"><label id="budgetLabel">本月预算 (¥)</label><input type="number" id="finBudget" step="100" onchange="saveBudget()" placeholder="如 3000"></div>
           </div>
         </div>
 
@@ -1028,7 +1035,10 @@ function renderTrend(){
 const EXP_CATS=['餐饮','交通','购物','居住','娱乐','医疗','学习','人情','订阅','其他'];
 const INC_CATS=['工资','兼职','理财','红包','报销','其他'];
 let txType='expense';
-const fmt=n=>'¥'+(Number(n)||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const CUR_SYM={CNY:'¥',USD:'$'};
+const getCur=()=>{try{return JSON.parse(localStorage.getItem('fin_currency'))||'CNY'}catch(e){return 'CNY'}};
+const fmt=n=>CUR_SYM[getCur()]+(Number(n)||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+function saveCurrency(){save('fin_currency',$('curSelect').value);renderFinance();}
 const monthKey=()=>todayKey().slice(0,7);
 function setTxType(t){
   txType=t;
@@ -1065,6 +1075,11 @@ function finBarChart(series){
 function renderFinance(){
   if(!$('txCat').innerHTML)fillCats();
   if(!$('txDate').value)$('txDate').value=todayKey();
+  const sym=CUR_SYM[getCur()];
+  if($('curSelect'))$('curSelect').value=getCur();
+  if($('txAmount'))$('txAmount').placeholder='金额 '+sym;
+  if($('acctBal'))$('acctBal').placeholder='余额 '+sym;
+  if($('budgetLabel'))$('budgetLabel').textContent='本月预算 ('+sym+')';
   $('finBudget').value=load('fin_budget','')||'';
   const tx=load('fin_tx',[]);const acc=load('fin_accounts',[]);const budget=parseFloat(load('fin_budget',''))||0;
   const assets=acc.reduce((s,a)=>s+(+a.balance||0),0);
@@ -1118,7 +1133,7 @@ function renderCatBreakdown(tx,mk){
 }
 
 /* ---------- 数据备份 ---------- */
-const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget'].includes(k)||k.startsWith('todos_'));
+const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget','fin_currency'].includes(k)||k.startsWith('todos_'));
 function exportData(){
   const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
   const blob=new Blob([JSON.stringify({_app:'life-planner',_date:todayKey(),data},null,2)],{type:'application/json'});
