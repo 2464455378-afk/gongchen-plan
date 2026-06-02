@@ -634,6 +634,7 @@ function showSection(s){
   document.querySelectorAll('.section').forEach(el=>el.classList.toggle('active',el.id==='sec-'+s));
   document.querySelectorAll('#nav .nav-item').forEach(el=>el.classList.toggle('active',el.dataset.s===s));
   $('crumbSec').textContent=SEC_NAME[s]||'生活规划';
+  if(s==='rewards'&&typeof renderRewards==='function')renderRewards();
   window.scrollTo(0,0);
 }
 
