@@ -1079,14 +1079,15 @@ function renderFinance(){
   const pct=budget?Math.min(100,monthExp/budget*100):0;
   const bar=$('finBudgetBar');bar.style.width=pct+'%';
   bar.style.background=(budget&&monthExp>budget)?'linear-gradient(90deg,#a8161f,#f08a7a)':'';
+  const[ty,tm,td]=todayKey().split('-').map(Number);
   if(budget){
-    const now=new Date();const dayNum=now.getDate();const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+    const dayNum=td;const dim=new Date(ty,tm,0).getDate();
     const avg=monthExp/dayNum;const proj=avg*dim;
     $('finBudgetNote').textContent=`日均 ${fmt(avg)} · 按此速度本月预计 ${fmt(proj)}`+(monthExp>budget?' · 已超预算':` · 剩 ${fmt(remain)}`);
   }else $('finBudgetNote').textContent='设置本月预算后，这里显示进度与花钱速度预测。';
   renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,mk);
-  const now=new Date(),y=now.getFullYear(),m=now.getMonth(),dn=now.getDate();const series=[];
-  for(let d=1;d<=dn;d++){const key=dKey(new Date(y,m,d));series.push({d:key,v:tx.filter(t=>t.type==='expense'&&t.date===key).reduce((s,t)=>s+t.amount,0)})}
+  const series=[];
+  for(let d=1;d<=td;d++){const key=`${ty}-${String(tm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;series.push({d:key,v:tx.filter(t=>t.type==='expense'&&t.date===key).reduce((s,t)=>s+t.amount,0)})}
   $('spendChart').innerHTML=finBarChart(series);
 }
 function renderTxList(tx){
@@ -1132,7 +1133,8 @@ function importData(e){
       if(typeof data!=='object')throw 0;
       if(!confirm('导入会覆盖当前同名数据，确定继续？'))return;
       Object.keys(data).forEach(k=>localStorage.setItem(k,data[k]));
-      alert('导入成功，页面将刷新');location.reload();
+      if(getSyncKey()){alert('导入成功，正在同步到云端并刷新');cloudPush().finally(()=>location.reload());}
+      else{alert('导入成功，页面将刷新');location.reload();}
     }catch(err){alert('文件格式不对，导入失败')}
   };
   reader.readAsText(file);e.target.value='';
@@ -1171,9 +1173,9 @@ function rewardMet(r){
 function condDesc(c){
   if(!c||c.type==='manual')return '手动达成';
   if(c.type==='abstain')return `戒色连续 ${c.days} 天`;
-  if(c.type==='habit'){const h=load('habits',[]).find(x=>x.id===c.habitId);return `习惯「${h?h.name:'已删除'}」连续 ${c.days} 天`;}
+  if(c.type==='habit'){const h=load('habits',[]).find(x=>x.id===c.habitId);return `习惯「${escapeHtml(h?h.name:'已删除')}」连续 ${c.days} 天`;}
   if(c.type==='weight')return `体重 ≤ ${c.target} kg`;
-  if(c.type==='goal'){const g=load('goals',[]).find(x=>x.id===c.goalId);return `完成大目标「${g?g.name:'已删除'}」`;}
+  if(c.type==='goal'){const g=load('goals',[]).find(x=>x.id===c.goalId);return `完成大目标「${escapeHtml(g?g.name:'已删除')}」`;}
   return '';
 }
 function renderRewards(){
