@@ -295,7 +295,11 @@
         <div class="card">
           <h2>➕ 新增习惯 <span class="en">ADD</span></h2>
           <div class="add-row">
-            <input id="habitInput" placeholder="例如：早起、读书 30 分钟、复盘工作…">
+            <input id="habitInput" placeholder="例如：早起、戒撸、读书 30 分钟…">
+            <select id="habitMode">
+              <option value="daily">每日打卡</option>
+              <option value="streak">持续坚持</option>
+            </select>
             <select id="habitCat">
               <option value="life">生活习惯</option>
               <option value="study">学习习惯</option>
@@ -303,6 +307,7 @@
             </select>
             <button onclick="addHabit()">添加</button>
           </div>
+          <p class="hint">「每日打卡」需每天点一下；「持续坚持」自动累计天数、不用每天输入，破了点重置。</p>
         </div>
         <div class="card">
           <h2>✅ 今日打卡 <span class="en">CHECK-IN</span></h2>
@@ -582,21 +587,42 @@ function renderSleepLog(){
 
 /* ---------- 习惯 ---------- */
 const HCATS=[['life','生活习惯','LIFE'],['study','学习习惯','STUDY'],['work','工作习惯','WORK']];
+function dayDiff(k1,k2){const[a,b,c]=k1.split('-').map(Number);const[d,e,f]=k2.split('-').map(Number);return Math.round((Date.UTC(d,e-1,f)-Date.UTC(a,b-1,c))/86400000)}
 function streakOf(dates){
   const set=new Set(dates);let s=0;let d=parseLocal(todayKey());
   if(!set.has(dKey(d)))d.setDate(d.getDate()-1);
   while(set.has(dKey(d))){s++;d.setDate(d.getDate()-1)}
   return s;
 }
+function habitStreak(it){
+  if(it.mode==='streak')return it.start?dayDiff(it.start,todayKey())+1:0;
+  return streakOf(it.dates||[]);
+}
 function addHabit(){
   const v=$('habitInput').value.trim();if(!v)return;
-  const h=load('habits',[]);h.push({id:uid(),name:v,cat:$('habitCat').value,dates:[]});
+  const mode=$('habitMode').value;
+  const h=load('habits',[]);
+  h.push({id:uid(),name:v,cat:$('habitCat').value,mode,dates:[],start:mode==='streak'?todayKey():null});
   save('habits',h);$('habitInput').value='';renderHabits();
 }
 function toggleHabit(id){
   const h=load('habits',[]);const it=h.find(x=>x.id===id);if(!it)return;
   const k=todayKey();const i=it.dates.indexOf(k);
   if(i>=0)it.dates.splice(i,1);else it.dates.push(k);
+  save('habits',h);renderHabits();
+}
+function resetHabit(id){
+  if(!confirm('重置这个习惯的连续天数？将从今天重新开始计'))return;
+  const h=load('habits',[]);const it=h.find(x=>x.id===id);if(!it)return;
+  it.start=todayKey();save('habits',h);renderHabits();
+}
+function setHabitStreak(id){
+  const h=load('habits',[]);const it=h.find(x=>x.id===id);if(!it)return;
+  const cur=habitStreak(it);
+  const input=prompt('已经连续坚持多少天？',cur);
+  if(input===null)return;
+  const n=Math.max(0,Math.floor(+input)||0);
+  it.start=n<=0?todayKey():addDays(todayKey(),-(n-1));
   save('habits',h);renderHabits();
 }
 function delHabit(id){
@@ -610,7 +636,17 @@ function renderHabits(){
     const items=h.filter(x=>x.cat===cat);
     if(!items.length)return '';
     const rows=items.map(it=>{
-      const done=it.dates.includes(k);const s=streakOf(it.dates);
+      const s=habitStreak(it);
+      if(it.mode==='streak'){
+        return `<div class="habit">
+          <div class="cb" style="cursor:default;border-style:dashed;color:var(--gold)">∞</div>
+          <span class="hn">${escapeHtml(it.name)}</span>
+          <span class="hs" style="cursor:pointer" title="点击设置已坚持天数" onclick="setHabitStreak('${it.id}')">连续 ${s} 天</span>
+          <button class="del" title="重置" onclick="resetHabit('${it.id}')">↺</button>
+          <button class="del" onclick="delHabit('${it.id}')">×</button>
+        </div>`;
+      }
+      const done=(it.dates||[]).includes(k);
       return `<div class="habit ${done?'done':''}">
         <div class="cb" onclick="toggleHabit('${it.id}')">✓</div>
         <span class="hn">${escapeHtml(it.name)}</span>
