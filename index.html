@@ -401,13 +401,6 @@
         <div class="eyebrow">★ 财务管理 · FINANCE</div>
         <h1 class="big">FINANCE</h1>
         <p class="lead">记录每天的开销与收入，掌握总资产，盯紧每月预算。</p>
-        <div style="margin:-14px 0 22px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
-          <span style="font-size:12px;color:var(--muted2)">货币单位</span>
-          <select id="curSelect" onchange="saveCurrency()" style="width:auto">
-            <option value="CNY">人民币 ¥</option>
-            <option value="USD">美元 $</option>
-          </select>
-        </div>
 
         <div class="card">
           <h2>💰 财务总览 <span class="en">OVERVIEW</span></h2>
@@ -420,7 +413,13 @@
           <div class="pbar"><i id="finBudgetBar" style="width:0%"></i></div>
           <p class="hint" id="finBudgetNote"></p>
           <div class="row" style="margin-top:12px">
-            <div class="field"><label id="budgetLabel">本月预算 (¥)</label><input type="number" id="finBudget" step="100" onchange="saveBudget()" placeholder="如 3000"></div>
+            <div class="field"><label>本月预算</label><input type="number" id="finBudget" step="100" onchange="saveBudget()" placeholder="如 3000"></div>
+            <div class="field" style="flex:0 0 auto"><label>预算/统计货币</label>
+              <select id="budgetCur" onchange="saveBudgetCur()" style="width:auto">
+                <option value="CNY">人民币 ¥</option>
+                <option value="USD">美元 $</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -431,7 +430,8 @@
             <button onclick="setTxType('income')">收入</button>
           </div>
           <div class="add-row">
-            <input type="number" id="txAmount" step="0.01" placeholder="金额 ¥" style="flex:1">
+            <input type="number" id="txAmount" step="0.01" placeholder="金额" style="flex:1">
+            <select id="txCur" style="width:auto"><option value="CNY">¥ 人民币</option><option value="USD">$ 美元</option></select>
             <select id="txCat"></select>
           </div>
           <div class="add-row">
@@ -445,7 +445,8 @@
           <h2>🏦 账户与资产 <span class="en">ASSETS</span></h2>
           <div class="add-row">
             <input id="acctName" placeholder="账户名，如 招行 / 支付宝 / 现金" style="flex:2">
-            <input type="number" id="acctBal" step="0.01" placeholder="余额 ¥" style="flex:1">
+            <input type="number" id="acctBal" step="0.01" placeholder="余额" style="flex:1">
+            <select id="acctCur" style="width:auto"><option value="CNY">¥ 人民币</option><option value="USD">$ 美元</option></select>
             <button onclick="addAccount()">添加</button>
           </div>
           <div id="acctList"></div>
@@ -1036,9 +1037,13 @@ const EXP_CATS=['餐饮','交通','购物','居住','娱乐','医疗','学习','
 const INC_CATS=['工资','兼职','理财','红包','报销','其他'];
 let txType='expense';
 const CUR_SYM={CNY:'¥',USD:'$'};
-const getCur=()=>{try{return JSON.parse(localStorage.getItem('fin_currency'))||'CNY'}catch(e){return 'CNY'}};
-const fmt=n=>CUR_SYM[getCur()]+(Number(n)||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
-function saveCurrency(){save('fin_currency',$('curSelect').value);renderFinance();}
+const sym=c=>CUR_SYM[c]||'¥';
+const fmtC=(n,c)=>sym(c)+(Number(n)||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const getBudgetCur=()=>{try{return JSON.parse(localStorage.getItem('fin_budgetCur'))||'CNY'}catch(e){return 'CNY'}};
+const getLastCur=()=>{try{return JSON.parse(localStorage.getItem('fin_lastCur'))||'CNY'}catch(e){return 'CNY'}};
+function sumByCur(list,getter){const o={};list.forEach(x=>{const c=x.cur||'CNY';o[c]=(o[c]||0)+(+getter(x)||0)});return o;}
+function multiFmt(o){const parts=Object.keys(CUR_SYM).filter(c=>o[c]).map(c=>fmtC(o[c],c));return parts.length?parts.join('  ·  '):fmtC(0,getBudgetCur());}
+function saveBudgetCur(){save('fin_budgetCur',$('budgetCur').value);renderFinance();}
 const monthKey=()=>todayKey().slice(0,7);
 function setTxType(t){
   txType=t;
@@ -1048,15 +1053,17 @@ function setTxType(t){
 function fillCats(){const cats=txType==='expense'?EXP_CATS:INC_CATS;$('txCat').innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('')}
 function addTx(){
   const amt=parseFloat($('txAmount').value);if(!amt||amt<=0){alert('请输入有效金额');return}
+  const cur=$('txCur')?$('txCur').value:'CNY';save('fin_lastCur',cur);
   const tx=load('fin_tx',[]);
-  tx.push({id:uid(),date:$('txDate').value||todayKey(),amount:amt,type:txType,cat:$('txCat').value,note:$('txNote').value.trim()});
+  tx.push({id:uid(),date:$('txDate').value||todayKey(),amount:amt,type:txType,cat:$('txCat').value,note:$('txNote').value.trim(),cur});
   save('fin_tx',tx);$('txAmount').value='';$('txNote').value='';renderFinance();
 }
 function delTx(id){save('fin_tx',load('fin_tx',[]).filter(x=>x.id!==id));renderFinance()}
 function addAccount(){
   const name=$('acctName').value.trim();const bal=parseFloat($('acctBal').value);
   if(!name){alert('请输入账户名');return}
-  const a=load('fin_accounts',[]);a.push({id:uid(),name,balance:isNaN(bal)?0:bal});
+  const cur=$('acctCur')?$('acctCur').value:'CNY';
+  const a=load('fin_accounts',[]);a.push({id:uid(),name,balance:isNaN(bal)?0:bal,cur});
   save('fin_accounts',a);$('acctName').value='';$('acctBal').value='';renderFinance();
 }
 function delAccount(id){save('fin_accounts',load('fin_accounts',[]).filter(x=>x.id!==id));renderFinance()}
@@ -1075,34 +1082,33 @@ function finBarChart(series){
 function renderFinance(){
   if(!$('txCat').innerHTML)fillCats();
   if(!$('txDate').value)$('txDate').value=todayKey();
-  const sym=CUR_SYM[getCur()];
-  if($('curSelect'))$('curSelect').value=getCur();
-  if($('txAmount'))$('txAmount').placeholder='金额 '+sym;
-  if($('acctBal'))$('acctBal').placeholder='余额 '+sym;
-  if($('budgetLabel'))$('budgetLabel').textContent='本月预算 ('+sym+')';
+  if($('txCur'))$('txCur').value=getLastCur();
+  if($('budgetCur'))$('budgetCur').value=getBudgetCur();
+  const bc=getBudgetCur();const bsym=sym(bc);
   $('finBudget').value=load('fin_budget','')||'';
   const tx=load('fin_tx',[]);const acc=load('fin_accounts',[]);const budget=parseFloat(load('fin_budget',''))||0;
-  const assets=acc.reduce((s,a)=>s+(+a.balance||0),0);
-  $('finAssets').textContent=fmt(assets);$('finAssets').className='v '+(assets>=0?'pos':'neg');
+  const assetsByCur=sumByCur(acc,a=>a.balance);
+  $('finAssets').textContent=multiFmt(assetsByCur);
+  $('finAssets').className='v '+(Object.values(assetsByCur).some(v=>v<0)?'neg':'pos');
   const mk=monthKey();
-  const monthExp=tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk).reduce((s,t)=>s+t.amount,0);
-  const todayExp=tx.filter(t=>t.type==='expense'&&t.date===todayKey()).reduce((s,t)=>s+t.amount,0);
-  $('finMonth').textContent=fmt(monthExp);$('finToday').textContent=fmt(todayExp);
-  const remain=budget-monthExp;
-  $('finRemain').textContent=budget?fmt(remain):'—';
+  const monthExpByCur=sumByCur(tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk),t=>t.amount);
+  const todayExpByCur=sumByCur(tx.filter(t=>t.type==='expense'&&t.date===todayKey()),t=>t.amount);
+  $('finMonth').textContent=multiFmt(monthExpByCur);$('finToday').textContent=multiFmt(todayExpByCur);
+  const monthExpBC=monthExpByCur[bc]||0;const remain=budget-monthExpBC;
+  $('finRemain').textContent=budget?fmtC(remain,bc):'—';
   $('finRemain').className='v '+(budget?(remain>=0?'pos':'neg'):'');
-  const pct=budget?Math.min(100,monthExp/budget*100):0;
+  const pct=budget?Math.min(100,monthExpBC/budget*100):0;
   const bar=$('finBudgetBar');bar.style.width=pct+'%';
-  bar.style.background=(budget&&monthExp>budget)?'linear-gradient(90deg,#a8161f,#f08a7a)':'';
+  bar.style.background=(budget&&monthExpBC>budget)?'linear-gradient(90deg,#a8161f,#f08a7a)':'';
   const[ty,tm,td]=todayKey().split('-').map(Number);
   if(budget){
     const dayNum=td;const dim=new Date(ty,tm,0).getDate();
-    const avg=monthExp/dayNum;const proj=avg*dim;
-    $('finBudgetNote').textContent=`日均 ${fmt(avg)} · 按此速度本月预计 ${fmt(proj)}`+(monthExp>budget?' · 已超预算':` · 剩 ${fmt(remain)}`);
-  }else $('finBudgetNote').textContent='设置本月预算后，这里显示进度与花钱速度预测。';
-  renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,mk);
+    const avg=monthExpBC/dayNum;const proj=avg*dim;
+    $('finBudgetNote').textContent=`统计货币 ${bsym} · 日均 ${fmtC(avg,bc)} · 本月预计 ${fmtC(proj,bc)}`+(monthExpBC>budget?' · 已超预算':` · 剩 ${fmtC(remain,bc)}`);
+  }else $('finBudgetNote').textContent=`预算与下方统计图按「统计货币 ${bsym}」计算（仅统计 ${bsym} 的支出）。设置预算后显示进度与预测。`;
+  renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,mk,bc);
   const series=[];
-  for(let d=1;d<=td;d++){const key=`${ty}-${String(tm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;series.push({d:key,v:tx.filter(t=>t.type==='expense'&&t.date===key).reduce((s,t)=>s+t.amount,0)})}
+  for(let d=1;d<=td;d++){const key=`${ty}-${String(tm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;series.push({d:key,v:tx.filter(t=>t.type==='expense'&&t.date===key&&(t.cur||'CNY')===bc).reduce((s,t)=>s+t.amount,0)})}
   $('spendChart').innerHTML=finBarChart(series);
 }
 function renderTxList(tx){
@@ -1112,28 +1118,28 @@ function renderTxList(tx){
   el.innerHTML=sorted.map(t=>`<div class="txn">
     <div class="ic">${escapeHtml(t.cat.slice(0,2))}</div>
     <div class="info"><b>${escapeHtml(t.cat)}${t.note?' · '+escapeHtml(t.note):''}</b><i>${t.date}</i></div>
-    <div class="amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}${fmt(t.amount)}</div>
+    <div class="amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}${fmtC(t.amount,t.cur)}</div>
     <button class="del" onclick="delTx('${t.id}')">×</button></div>`).join('');
 }
 function renderAccounts(acc){
   const el=$('acctList');
   if(!acc.length){el.innerHTML='<p class="empty">添加账户以统计总资产</p>';return}
-  el.innerHTML=acc.map(a=>`<div class="acct"><span class="an">${escapeHtml(a.name)}</span><span class="ab">${fmt(a.balance)}</span><button class="del" onclick="delAccount('${a.id}')">×</button></div>`).join('');
+  el.innerHTML=acc.map(a=>`<div class="acct"><span class="an">${escapeHtml(a.name)}</span><span class="ab">${fmtC(a.balance,a.cur)}</span><button class="del" onclick="delAccount('${a.id}')">×</button></div>`).join('');
 }
-function renderCatBreakdown(tx,mk){
-  const exp=tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk);
+function renderCatBreakdown(tx,mk,bc){
+  const exp=tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk&&(t.cur||'CNY')===bc);
   const el=$('catBreakdown');
-  if(!exp.length){el.innerHTML='<p class="empty">本月还没有支出记录</p>';return}
+  if(!exp.length){el.innerHTML=`<p class="empty">本月还没有 ${sym(bc)} 支出记录</p>`;return}
   const by={};exp.forEach(t=>by[t.cat]=(by[t.cat]||0)+t.amount);
   const total=Object.values(by).reduce((s,v)=>s+v,0);
   el.innerHTML=Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{
     const p=Math.round(v/total*100);
-    return `<div class="catbar"><div class="top"><span class="c">${escapeHtml(c)}</span><span class="m">${fmt(v)} · ${p}%</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
+    return `<div class="catbar"><div class="top"><span class="c">${escapeHtml(c)}</span><span class="m">${fmtC(v,bc)} · ${p}%</span></div><div class="bar"><i style="width:${p}%"></i></div></div>`;
   }).join('');
 }
 
 /* ---------- 数据备份 ---------- */
-const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget','fin_currency'].includes(k)||k.startsWith('todos_'));
+const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget','fin_budgetCur','fin_lastCur'].includes(k)||k.startsWith('todos_'));
 function exportData(){
   const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
   const blob=new Blob([JSON.stringify({_app:'life-planner',_date:todayKey(),data},null,2)],{type:'application/json'});
