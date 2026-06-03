@@ -52,6 +52,16 @@
   .crumb{font-size:13px;color:var(--muted2);letter-spacing:1px}
   .crumb b{color:var(--cream)}
   .gov-pill{font-size:12px;color:var(--gold);border:1px solid var(--line-strong);border-radius:20px;padding:6px 14px;letter-spacing:1px}
+  .theme-btn{background:transparent;border:1px solid var(--line-strong);color:var(--gold);border-radius:50%;
+    width:34px;height:34px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex:none}
+  .theme-btn:hover{background:rgba(236,197,78,.12)}
+  body.night{
+    background:radial-gradient(1200px 700px at 70% -10%,#241010 0%,#160a0a 42%,#0b0606 100%);
+    --side:#140909; --side-2:#090404;
+    --card:rgba(48,23,23,.45); --card-2:rgba(0,0,0,.36);
+    --line:rgba(236,197,78,.14); --line-strong:rgba(236,197,78,.38);
+    --red:#3a1414; --red-2:#491919;
+  }
   .stage{padding:30px;max-width:920px;position:relative}
   .stage::before{content:"★";position:absolute;right:-40px;top:60px;font-size:340px;color:rgba(236,197,78,.04);
     pointer-events:none;line-height:1;z-index:0}
@@ -234,6 +244,7 @@
 </style>
 </head>
 <body>
+<script>try{var _t=localStorage.getItem('theme');if(_t&&JSON.parse(_t)==='night')document.body.classList.add('night')}catch(e){}</script>
 <div class="app">
   <!-- 侧边栏 -->
   <aside class="sidebar">
@@ -271,7 +282,10 @@
   <main class="main">
     <div class="topbar">
       <div class="crumb">个人平台 / <b id="crumbSec">生活规划</b></div>
-      <div class="gov-pill">★ 生活规划系统</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" aria-label="切换夜间模式">🌙</button>
+        <div class="gov-pill">★ 生活规划系统</div>
+      </div>
     </div>
     <div class="stage">
 
@@ -622,6 +636,11 @@ let applyingCloud=false,pushTimer=null;
 function save(k,v){localStorage.setItem(k,JSON.stringify(v));if(!applyingCloud)schedulePush();}
 const escapeHtml=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+/* ---------- 夜间模式 ---------- */
+function getTheme(){try{return JSON.parse(localStorage.getItem('theme'))||'day'}catch(e){return 'day'}}
+function applyTheme(){const night=getTheme()==='night';document.body.classList.toggle('night',night);if($('themeBtn'))$('themeBtn').textContent=night?'☀️':'🌙';}
+function toggleTheme(){localStorage.setItem('theme',JSON.stringify(getTheme()==='night'?'day':'night'));applyTheme();}
 
 /* ---------- 区块切换 ---------- */
 const SEC_NAME={today:'今日',tomorrow:'明日计划',habits:'习惯养成',goals:'长期规划',finance:'财务管理',discipline:'自律',rewards:'奖励池',stats:'数据统计',backup:'数据备份'};
@@ -1327,6 +1346,7 @@ async function cloudSyncOnLoad(){
 }
 
 /* ---------- 初始化 ---------- */
+applyTheme();
 $('tzSelect').value=getTZ();renderTodayLead();
 renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
 setTxType('expense');renderFinance();updateRewardForm();renderRewards();
