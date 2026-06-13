@@ -534,6 +534,17 @@
         <h1 class="big">DEEDS</h1>
         <p class="lead">每天记下自己做的善事与过失，向善而行，日省其身。</p>
         <div class="card">
+          <h2>📊 汇总 <span class="en">SUMMARY</span></h2>
+          <div class="seg" id="deedsPeriodSeg" style="margin-bottom:14px">
+            <button data-p="week" onclick="setDeedsPeriod('week')">近7天</button>
+            <button data-p="month" class="on" onclick="setDeedsPeriod('month')">本月</button>
+            <button data-p="year" onclick="setDeedsPeriod('year')">本年</button>
+            <button data-p="all" onclick="setDeedsPeriod('all')">全部</button>
+          </div>
+          <div class="review-grid" id="deedsSummary"></div>
+          <p class="hint" id="deedsSummaryNote"></p>
+        </div>
+        <div class="card">
           <h2>☀️ 今日善行 <span class="en">GOOD</span></h2>
           <div class="add-row">
             <input id="goodInput" placeholder="记一件善事，回车确认…" onkeydown="if(event.key==='Enter')addDeed('good')">
@@ -1262,6 +1273,28 @@ function renderDeeds(){
     if(g||b||i===0)rows.push(`<div class="deed-recent"><span class="d">${i===0?'今天':k.slice(5)}</span><span><span class="g">善 ${g}</span> · <span class="b">过 ${b}</span></span></div>`);
   }
   if($('deedsRecent'))$('deedsRecent').innerHTML=rows.length?rows.join(''):'<p class="empty">最近还没有记录</p>';
+  renderDeedsSummary();
+}
+let deedsPeriod='month';
+const DEEDS_PERIOD_LABEL={week:'近 7 天',month:'本月',year:'本年',all:'全部'};
+function setDeedsPeriod(p){deedsPeriod=p;document.querySelectorAll('#deedsPeriodSeg button').forEach(b=>b.classList.toggle('on',b.dataset.p===p));renderDeedsSummary();}
+function deedsInPeriod(k){
+  if(deedsPeriod==='all')return true;
+  if(deedsPeriod==='week'){const diff=dayDiff(k,todayKey());return diff>=0&&diff<=6;}
+  if(deedsPeriod==='month')return k.slice(0,7)===todayKey().slice(0,7);
+  if(deedsPeriod==='year')return k.slice(0,4)===todayKey().slice(0,4);
+  return false;
+}
+function renderDeedsSummary(){
+  const d=loadDeeds();let g=0,b=0,days=0;
+  Object.keys(d).forEach(k=>{if(!deedsInPeriod(k))return;const gg=(d[k].good||[]).length,bb=(d[k].bad||[]).length;if(gg||bb){g+=gg;b+=bb;days++;}});
+  const net=g-b;
+  if($('deedsSummary'))$('deedsSummary').innerHTML=`
+    <div class="rev"><div class="v" style="color:var(--green)">${g}</div><div class="l">善行（件）</div></div>
+    <div class="rev"><div class="v" style="color:var(--redx)">${b}</div><div class="l">过失（件）</div></div>
+    <div class="rev"><div class="v" style="color:${net>=0?'var(--green)':'var(--redx)'}">${net>=0?'+':''}${net}</div><div class="l">净值（善−过）</div></div>
+    <div class="rev"><div class="v" style="color:var(--gold)">${days}</div><div class="l">记录天数</div></div>`;
+  if($('deedsSummaryNote'))$('deedsSummaryNote').textContent=`${DEEDS_PERIOD_LABEL[deedsPeriod]}统计`+(g+b===0?' · 还没有记录':'');
 }
 
 /* ---------- 奖励池 ---------- */
