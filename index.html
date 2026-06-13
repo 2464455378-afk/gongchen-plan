@@ -564,6 +564,20 @@
           <h2>📜 近 7 天 <span class="en">RECENT</span></h2>
           <div id="deedsRecent"></div>
         </div>
+        <div class="card">
+          <h2>💝 捐款记录 <span class="en">DONATIONS</span></h2>
+          <div class="add-row">
+            <input type="number" id="donAmount" step="0.01" placeholder="捐款金额" style="flex:1">
+            <select id="donCur" style="width:auto"><option value="CNY">¥ 人民币</option><option value="USD">$ 美元</option></select>
+          </div>
+          <div class="add-row">
+            <div class="field"><label>日期</label><input type="date" id="donDate"></div>
+            <div class="field" style="flex:2"><label>捐给 / 备注（可选）</label><input id="donNote" placeholder="如 红十字会 / 希望工程…"></div>
+            <button onclick="addDonation()" style="align-self:flex-end">记录</button>
+          </div>
+          <div id="donSummary"></div>
+          <div id="donList"></div>
+        </div>
       </section>
 
       <!-- 奖励池 -->
@@ -1225,7 +1239,7 @@ function renderCatBreakdown(tx,bc){
 }
 
 /* ---------- 数据备份 ---------- */
-const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget','fin_budgetCur','fin_lastCur','deeds'].includes(k)||k.startsWith('todos_'));
+const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget','fin_budgetCur','fin_lastCur','deeds','donations'].includes(k)||k.startsWith('todos_'));
 function exportData(){
   const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
   const blob=new Blob([JSON.stringify({_app:'life-planner',_date:todayKey(),data},null,2)],{type:'application/json'});
@@ -1295,6 +1309,34 @@ function renderDeedsSummary(){
     <div class="rev"><div class="v" style="color:${net>=0?'var(--green)':'var(--redx)'}">${net>=0?'+':''}${net}</div><div class="l">净值（善−过）</div></div>
     <div class="rev"><div class="v" style="color:var(--gold)">${days}</div><div class="l">记录天数</div></div>`;
   if($('deedsSummaryNote'))$('deedsSummaryNote').textContent=`${DEEDS_PERIOD_LABEL[deedsPeriod]}统计`+(g+b===0?' · 还没有记录':'');
+  renderDonations();
+}
+function addDonation(){
+  const amt=parseFloat($('donAmount').value);if(!amt||amt<=0){alert('请输入有效金额');return}
+  const cur=$('donCur')?$('donCur').value:'CNY';
+  const list=load('donations',[]);
+  list.push({id:uid(),date:$('donDate').value||todayKey(),amount:amt,cur,note:$('donNote').value.trim()});
+  save('donations',list);$('donAmount').value='';$('donNote').value='';renderDonations();
+}
+function delDonation(id){save('donations',load('donations',[]).filter(x=>x.id!==id));renderDonations()}
+function renderDonations(){
+  if($('donDate')&&!$('donDate').value)$('donDate').value=todayKey();
+  const list=load('donations',[]);
+  const allByCur=sumByCur(list,d=>d.amount);
+  const ty=todayKey().slice(0,4);
+  const yearByCur=sumByCur(list.filter(d=>d.date.slice(0,4)===ty),d=>d.amount);
+  if($('donSummary'))$('donSummary').innerHTML=`<div class="review-grid">
+    <div class="rev"><div class="v" style="color:var(--gold)">${multiFmt(allByCur)}</div><div class="l">累计捐款</div></div>
+    <div class="rev"><div class="v" style="color:var(--green)">${multiFmt(yearByCur)}</div><div class="l">本年捐款</div></div>
+  </div><p class="hint" style="margin:8px 0 4px">共 ${list.length} 笔</p>`;
+  const el=$('donList');if(!el)return;
+  if(!list.length){el.innerHTML='<p class="empty">还没有捐款记录</p>';return}
+  const sorted=[...list].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,50);
+  el.innerHTML=sorted.map(d=>`<div class="txn">
+    <div class="ic">捐</div>
+    <div class="info"><b>${d.note?escapeHtml(d.note):'捐款'}</b><i>${d.date}</i></div>
+    <div class="amt inc">${fmtC(d.amount,d.cur)}</div>
+    <button class="del" onclick="delDonation('${d.id}')">×</button></div>`).join('');
 }
 
 /* ---------- 奖励池 ---------- */
