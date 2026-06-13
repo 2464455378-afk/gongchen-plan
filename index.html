@@ -212,6 +212,16 @@
   .acct:last-child{border-bottom:none}
   .acct .an{flex:1;font-size:14px;color:var(--cream)}
   .acct .ab{font-weight:700;color:var(--gold)}
+  /* 每日善恶 */
+  .deed{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .deed:last-child{border-bottom:none}
+  .deed .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .deed.good .dot{background:var(--green)} .deed.bad .dot{background:var(--redx)}
+  .deed span{flex:1;font-size:14px;color:var(--cream)}
+  .deed-recent{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .deed-recent:last-child{border-bottom:none}
+  .deed-recent .d{color:var(--muted2)}
+  .deed-recent .g{color:var(--green)} .deed-recent .b{color:var(--redx)}
   /* 奖励池 */
   .reward{background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
   .reward.claimed{opacity:.75}
@@ -270,6 +280,7 @@
       <div class="nav-item" data-s="goals" onclick="showSection('goals')"><span class="st">★</span><span><b>长期规划</b><i>目标 · 进度</i></span></div>
       <div class="nav-item" data-s="finance" onclick="showSection('finance')"><span class="st">★</span><span><b>财务管理</b><i>资产 · 记账 · 预算</i></span></div>
       <div class="nav-item" data-s="discipline" onclick="showSection('discipline')"><span class="st">★</span><span><b>自律</b><i>戒色 · 减肥</i></span></div>
+      <div class="nav-item" data-s="deeds" onclick="showSection('deeds')"><span class="st">★</span><span><b>每日善恶</b><i>善行 · 过失</i></span></div>
       <div class="nav-item" data-s="rewards" onclick="showSection('rewards')"><span class="st">★</span><span><b>奖励池</b><i>达成 · 兑奖</i></span></div>
       <div class="nav-item" data-s="stats" onclick="showSection('stats')"><span class="st">★</span><span><b>数据统计</b><i>日历 · 趋势</i></span></div>
       <div class="nav-item" data-s="backup" onclick="showSection('backup')"><span class="st">★</span><span><b>数据备份</b><i>导出 · 导入</i></span></div>
@@ -517,6 +528,33 @@
         </div>
       </section>
 
+      <!-- 每日善恶 -->
+      <section id="sec-deeds" class="section">
+        <div class="eyebrow">★ 每日善恶 · DEEDS</div>
+        <h1 class="big">DEEDS</h1>
+        <p class="lead">每天记下自己做的善事与过失，向善而行，日省其身。</p>
+        <div class="card">
+          <h2>☀️ 今日善行 <span class="en">GOOD</span></h2>
+          <div class="add-row">
+            <input id="goodInput" placeholder="记一件善事，回车确认…" onkeydown="if(event.key==='Enter')addDeed('good')">
+            <button onclick="addDeed('good')">添加</button>
+          </div>
+          <ul id="goodList"></ul>
+        </div>
+        <div class="card">
+          <h2>⚠️ 今日之过 <span class="en">BAD</span></h2>
+          <div class="add-row">
+            <input id="badInput" placeholder="记一件过失，回车确认…" onkeydown="if(event.key==='Enter')addDeed('bad')">
+            <button onclick="addDeed('bad')">添加</button>
+          </div>
+          <ul id="badList"></ul>
+        </div>
+        <div class="card">
+          <h2>📜 近 7 天 <span class="en">RECENT</span></h2>
+          <div id="deedsRecent"></div>
+        </div>
+      </section>
+
       <!-- 奖励池 -->
       <section id="sec-rewards" class="section">
         <div class="eyebrow">★ 奖励池 · REWARDS</div>
@@ -643,7 +681,7 @@ function applyTheme(){const night=getTheme()==='night';document.body.classList.t
 function toggleTheme(){localStorage.setItem('theme',JSON.stringify(getTheme()==='night'?'day':'night'));applyTheme();}
 
 /* ---------- 区块切换 ---------- */
-const SEC_NAME={today:'今日',tomorrow:'明日计划',habits:'习惯养成',goals:'长期规划',finance:'财务管理',discipline:'自律',rewards:'奖励池',stats:'数据统计',backup:'数据备份'};
+const SEC_NAME={today:'今日',tomorrow:'明日计划',habits:'习惯养成',goals:'长期规划',finance:'财务管理',discipline:'自律',deeds:'每日善恶',rewards:'奖励池',stats:'数据统计',backup:'数据备份'};
 function renderTodayLead(){
   const opt={year:'numeric',month:'long',day:'numeric',weekday:'long'};
   if(getTZ())opt.timeZone=getTZ();
@@ -1176,7 +1214,7 @@ function renderCatBreakdown(tx,bc){
 }
 
 /* ---------- 数据备份 ---------- */
-const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget','fin_budgetCur','fin_lastCur'].includes(k)||k.startsWith('todos_'));
+const BACKUP_KEYS=()=>Object.keys(localStorage).filter(k=>['tz','sleep','sleepLog','abstain','weights','goalWeight','habits','goals','rewards','fin_tx','fin_accounts','fin_budget','fin_budgetCur','fin_lastCur','deeds'].includes(k)||k.startsWith('todos_'));
 function exportData(){
   const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
   const blob=new Blob([JSON.stringify({_app:'life-planner',_date:todayKey(),data},null,2)],{type:'application/json'});
@@ -1196,6 +1234,34 @@ function importData(e){
     }catch(err){alert('文件格式不对，导入失败')}
   };
   reader.readAsText(file);e.target.value='';
+}
+
+/* ---------- 每日善恶 ---------- */
+function loadDeeds(){return load('deeds',{})}
+function addDeed(type){
+  const inp=$(type+'Input');const v=inp.value.trim();if(!v)return;
+  const d=loadDeeds();const k=todayKey();if(!d[k])d[k]={good:[],bad:[]};
+  if(!d[k][type])d[k][type]=[];
+  d[k][type].push({id:uid(),text:v});save('deeds',d);inp.value='';renderDeeds();
+}
+function delDeed(type,id){
+  const d=loadDeeds();const k=todayKey();if(!d[k]||!d[k][type])return;
+  d[k][type]=d[k][type].filter(x=>x.id!==id);save('deeds',d);renderDeeds();
+}
+function renderDeeds(){
+  const d=loadDeeds();const td=d[todayKey()]||{good:[],bad:[]};
+  ['good','bad'].forEach(type=>{
+    const list=td[type]||[];const el=$(type+'List');if(!el)return;
+    if(!list.length){el.innerHTML=`<p class="empty">${type==='good'?'今天还没记善事':'今天还没记过失'}</p>`;}
+    else el.innerHTML=list.map(x=>`<li class="deed ${type}"><i class="dot"></i><span>${escapeHtml(x.text)}</span><button class="del" onclick="delDeed('${type}','${x.id}')">×</button></li>`).join('');
+  });
+  const rows=[];
+  for(let i=0;i<7;i++){
+    const k=addDays(todayKey(),-i);const e=d[k]||{good:[],bad:[]};
+    const g=(e.good||[]).length,b=(e.bad||[]).length;
+    if(g||b||i===0)rows.push(`<div class="deed-recent"><span class="d">${i===0?'今天':k.slice(5)}</span><span><span class="g">善 ${g}</span> · <span class="b">过 ${b}</span></span></div>`);
+  }
+  if($('deedsRecent'))$('deedsRecent').innerHTML=rows.length?rows.join(''):'<p class="empty">最近还没有记录</p>';
 }
 
 /* ---------- 奖励池 ---------- */
@@ -1296,7 +1362,7 @@ function rerenderAll(){
   if($('tzSelect'))$('tzSelect').value=getTZ();
   if(typeof renderTodayLead==='function')renderTodayLead();
   renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();
-  renderAbstain();renderWeight();renderCal();renderReview();renderTrend();renderFinance();renderRewards();
+  renderAbstain();renderWeight();renderCal();renderReview();renderTrend();renderFinance();renderRewards();renderDeeds();
 }
 async function enableSync(){
   const key=$('syncKeyInput').value.trim();
@@ -1349,7 +1415,7 @@ async function cloudSyncOnLoad(){
 applyTheme();
 $('tzSelect').value=getTZ();renderTodayLead();
 renderTodos();renderPlan();renderSleep();renderSleepLog();renderHabits();renderGoals();renderAbstain();renderWeight();renderCal();renderReview();renderTrend();
-setTxType('expense');renderFinance();updateRewardForm();renderRewards();
+setTxType('expense');renderFinance();updateRewardForm();renderRewards();renderDeeds();
 updateSyncUI();cloudSyncOnLoad();
 setInterval(renderSleep,60000);
 </script>
