@@ -1475,6 +1475,21 @@ function updateSyncUI(msg){
     $('syncStatus').textContent=`已开启 · ${msg||'最近同步：'+when}`;
   }else $('syncStatus').textContent='未开启 · 填入或生成同步密钥后开启';
 }
+/* 只拉不推：菜单栏组件等其它端写入后，本页在重新获得焦点 / 定时轮询时补拉一次，
+   避免本页内存里的旧数据把别处的写入整块覆盖掉。 */
+let _pullAt=0;
+async function cloudPullIfNewer(){
+  const key=getSyncKey();if(!key)return;
+  const now=Date.now();if(now-_pullAt<3000)return;_pullAt=now;
+  try{
+    const cloud=await cloudGet(key);
+    const localTs=+(localStorage.getItem('_syncTs')||0);
+    if(cloud&&cloud.data&&(+cloud.ts||0)>localTs){applyCloud(cloud);updateSyncUI('已拉取云端更新');}
+  }catch(e){}
+}
+window.addEventListener('focus',cloudPullIfNewer);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)cloudPullIfNewer()});
+setInterval(()=>{if(!document.hidden)cloudPullIfNewer()},30000);
 async function cloudSyncOnLoad(){
   const key=getSyncKey();if(!key){updateSyncUI();return}
   try{
