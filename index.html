@@ -1416,6 +1416,19 @@ async function cloudGet(key){
 }
 async function cloudPush(){
   const key=getSyncKey();if(!key)return;
+  /* 冲突保护：整块 PUT 会替换云端全部内容。若云端在我们上次同步之后被别处
+     （如菜单栏组件）写过，先把本机没有的键收下来，避免把它们整块抹掉。 */
+  try{
+    const cloud=await cloudGet(key);
+    const localTs=+(localStorage.getItem('_syncTs')||0);
+    if(cloud&&cloud.data&&(+cloud.ts||0)>localTs){
+      let adopted=0;
+      Object.keys(cloud.data).forEach(k=>{
+        if(cloud.data[k]!=null&&localStorage.getItem(k)==null){localStorage.setItem(k,cloud.data[k]);adopted++}
+      });
+      if(adopted){rerenderAll();}
+    }
+  }catch(e){}
   const data={};BACKUP_KEYS().forEach(k=>data[k]=localStorage.getItem(k));
   const ts=Date.now();
   try{
@@ -1489,7 +1502,7 @@ async function cloudPullIfNewer(){
 }
 window.addEventListener('focus',cloudPullIfNewer);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)cloudPullIfNewer()});
-setInterval(()=>{if(!document.hidden)cloudPullIfNewer()},30000);
+setInterval(()=>{if(!document.hidden)cloudPullIfNewer()},10000);
 async function cloudSyncOnLoad(){
   const key=getSyncKey();if(!key){updateSyncUI();return}
   try{

@@ -24,6 +24,9 @@ if [ -z "${API_BASE:-}" ] || [ -z "${SYNC_KEY:-}" ]; then
 fi
 API="${API_BASE%/}/api/data?key=${SYNC_KEY}"
 
+# 调试：记录每一次被调用（含参数），用于排查 SwiftBar 点击是否真的触发脚本
+printf '%s  调用: [%s]\n' "$(date '+%H:%M:%S')" "$*" >>"$HOME/.config/gongchen-discipline/dialog.log" 2>/dev/null
+
 # ─────────────────────── 工具 ───────────────────────
 
 fetch_blob(){ curl -fsS --max-time 8 "$API" 2>/dev/null; }
@@ -156,10 +159,15 @@ case "${1:-}" in
              cur:(if ($c|test("\\$|usd")) then "USD" elif ($c|test("¥|￥|cny")) then "CNY" else $def end),
              note:($m.note | sub("\\s+$";""))}
           end')
-      if [ "$(printf '%s' "$parsed" | jq -r '.err // true')" = "true" ]; then
-        notify "没记下" "金额格式看不懂：${text}"; exit 0; fi
-      if [ "$(printf '%s' "$parsed" | jq -r 'if (.amount // 0) > 0 then "y" else "n" end')" != "y" ]; then
-        notify "没记下" "金额要大于 0"; exit 0; fi
+      verdict=$(printf '%s' "$parsed" | jq -r '
+        if (type != "object") then "bad"
+        elif (.err | not | not) then "bad"
+        elif ((.amount // 0) <= 0) then "zero"
+        else "ok" end')
+      case "$verdict" in
+        bad)  notify "没记下" "金额格式看不懂：${text}"; exit 0 ;;
+        zero) notify "没记下" "金额要大于 0"; exit 0 ;;
+      esac
       amt=$(printf '%s' "$parsed" | jq -r '.amount')
       cur=$(printf '%s' "$parsed" | jq -r '.cur')
       note=$(printf '%s' "$parsed" | jq -r '.note')
@@ -282,11 +290,11 @@ for c in "${CATS[@]}"; do
   for a in 10 20 30 50 100 200; do
     echo "----¥$a | bash=\"$SELF\" param1=\"add\" param2=\"$c\" param3=\"$a\" param4=\"CNY\" terminal=false refresh=true"
   done
-  echo "---------"
+  echo "-------"
   for a in 5 10 20 50; do
     echo "----\$$a | bash=\"$SELF\" param1=\"add\" param2=\"$c\" param3=\"$a\" param4=\"USD\" terminal=false refresh=true"
   done
-  echo "---------"
+  echo "-------"
   echo "----自定义金额… | bash=\"$SELF\" param1=\"add\" param2=\"$c\" terminal=false refresh=true"
 done
 
