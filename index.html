@@ -207,6 +207,22 @@
   .txn .info i{font-size:11px;color:var(--dim);font-style:normal;display:block}
   .txn .amt{font-weight:700}
   .txn .amt.exp{color:var(--redx)} .txn .amt.inc{color:var(--green)}
+  .health{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .health .sc{font-size:46px;font-weight:800;line-height:1;color:var(--gold)}
+  .health .sc small{font-size:15px;color:var(--dim);font-weight:700;margin-left:3px}
+  .health .gd{display:inline-block;padding:5px 14px;border-radius:999px;font-weight:800;font-size:15px;
+    border:1px solid currentColor;margin-bottom:5px}
+  .health .gt{font-size:13px;color:var(--muted2);max-width:420px}
+  .hrow{margin-bottom:11px}
+  .hrow .top{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin-bottom:4px}
+  .hrow .top .c{color:var(--cream);font-weight:600} .hrow .top .m{color:var(--muted2);flex-shrink:0}
+  .hrow .bar{height:7px;background:rgba(0,0,0,.3);border-radius:6px;overflow:hidden}
+  .hrow .bar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--gold-deep),var(--gold-2))}
+  .hrow .tip{font-size:12px;color:var(--dim);margin-top:4px}
+  .hrow.na .bar>i{background:rgba(236,197,78,.18)}
+  .lgd{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--muted2)}
+  .lgd span{display:inline-flex;align-items:center;gap:6px}
+  .lgd i{width:16px;height:3px;border-radius:2px;display:inline-block}
   .catbar{margin-bottom:10px}
   .catbar .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
   .catbar .top .c{color:var(--cream)} .catbar .top .m{color:var(--muted2)}
@@ -254,6 +270,8 @@
     .stage::before{font-size:200px;right:-20px}
     .topbar{padding:14px 20px}
     .crumb{display:none}
+    .seg{max-width:100%;overflow-x:auto}
+    .seg button{padding:8px 13px;white-space:nowrap}
   }
 </style>
 </head>
@@ -454,6 +472,11 @@
         </div>
 
         <div class="card">
+          <h2>🩺 财务健康评级 <span class="en">HEALTH</span></h2>
+          <div id="finHealth"></div>
+        </div>
+
+        <div class="card">
           <h2>✏️ 记一笔 <span class="en">ADD</span></h2>
           <div class="seg" id="txType" style="margin-bottom:12px">
             <button class="on" onclick="setTxType('expense')">支出</button>
@@ -483,6 +506,22 @@
           </div>
           <div id="acctList"></div>
           <p class="hint">负债填负数（如信用卡欠款 -2000）。总资产 = 所有账户余额之和，按人民币 / 美元分别统计；记一笔时选中的账户会自动增减。</p>
+        </div>
+
+        <div class="card">
+          <h2>📉 收支曲线 <span class="en">TREND</span></h2>
+          <div class="seg" id="finTrendSeg" style="margin-bottom:14px">
+            <button data-p="d30" onclick="setFinTrendPeriod('d30')">30 天</button>
+            <button data-p="m6" class="on" onclick="setFinTrendPeriod('m6')">6 个月</button>
+            <button data-p="m12" onclick="setFinTrendPeriod('m12')">12 个月</button>
+          </div>
+          <div id="finTrendChart"></div>
+          <div class="lgd">
+            <span><i style="background:var(--green)"></i>收入</span>
+            <span><i style="background:var(--redx)"></i>支出</span>
+            <span><i style="background:var(--gold);opacity:.85"></i>结余（收入−支出）</span>
+          </div>
+          <p class="hint" id="finTrendNote"></p>
         </div>
 
         <div class="card">
@@ -1200,6 +1239,158 @@ function finBarChart(series){
   const xl=`<text x="${padL}" y="${H-8}" fill="#cdaf6a" font-size="11">${series[0].d.slice(5)}</text><text x="${W-padR}" y="${H-8}" fill="#cdaf6a" font-size="11" text-anchor="end">${series[n-1].d.slice(5)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}">${grid}${bars}${xl}</svg>`;
 }
+/* ============ 收支曲线（二维坐标） ============ */
+let finTrendPeriod='m6';
+function setFinTrendPeriod(p){
+  finTrendPeriod=p;
+  document.querySelectorAll('#finTrendSeg button').forEach(b=>b.classList.toggle('on',b.dataset.p===p));
+  renderFinTrend(load('fin_tx',[]),getBudgetCur());
+}
+const finDayKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function finShortNum(v){
+  const a=Math.abs(v);
+  if(a>=1e6)return (v/1e6).toFixed(1).replace(/\.0$/,'')+'m';
+  if(a>=1e3)return (v/1e3).toFixed(1).replace(/\.0$/,'')+'k';
+  return String(Math.round(v));
+}
+// 生成时间轴：近 30 天按日，近 6/12 个月按月
+function finTrendBuckets(){
+  const now=new Date();const out=[];
+  if(finTrendPeriod==='d30'){
+    for(let i=29;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i);
+      const k=finDayKey(d);out.push({key:k,label:k.slice(5),match:t=>t.date===k})}
+  }else{
+    const n=finTrendPeriod==='m12'?12:6;
+    for(let i=n-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+      const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      out.push({key:k,label:(d.getMonth()+1)+'月',match:t=>t.date.slice(0,7)===k})}
+  }
+  return out;
+}
+function finLineChart(pts,bc){
+  const W=680,H=240,padL=54,padR=14,padT=16,padB=36,n=pts.length;
+  const nets=pts.map(p=>p.inc-p.exp);
+  const hi=Math.max(1,...pts.map(p=>Math.max(p.inc,p.exp)),...nets);
+  const lo=Math.min(0,...nets);
+  const X=i=>n===1?padL+(W-padL-padR)/2:padL+i*(W-padL-padR)/(n-1);
+  const Y=v=>padT+(hi-v)/(hi-lo)*(H-padT-padB);
+  const curve=vals=>{
+    const p=vals.map((v,i)=>[X(i),Y(v)]);
+    if(!p.length)return '';
+    if(p.length===1)return `M${p[0][0].toFixed(1)},${p[0][1].toFixed(1)}l0.01,0`;
+    let d=`M${p[0][0].toFixed(1)},${p[0][1].toFixed(1)}`;
+    for(let i=0;i<p.length-1;i++){
+      const a=p[i-1]||p[i],b=p[i],c=p[i+1],e=p[i+2]||c;
+      d+=`C${(b[0]+(c[0]-a[0])/6).toFixed(1)},${(b[1]+(c[1]-a[1])/6).toFixed(1)} `
+       + `${(c[0]-(e[0]-b[0])/6).toFixed(1)},${(c[1]-(e[1]-b[1])/6).toFixed(1)} `
+       + `${c[0].toFixed(1)},${c[1].toFixed(1)}`;
+    }
+    return d;
+  };
+  const ticks=[0,.25,.5,.75,1].map(f=>lo+(hi-lo)*f);
+  const grid=ticks.map(v=>`<line x1="${padL}" y1="${Y(v).toFixed(1)}" x2="${W-padR}" y2="${Y(v).toFixed(1)}" stroke="rgba(236,197,78,${Math.abs(v)<1e-9?'.30':'.10'})"/>`
+    +`<text x="${padL-7}" y="${(Y(v)+4).toFixed(1)}" fill="#a07c4a" font-size="11" text-anchor="end">${finShortNum(v)}</text>`).join('');
+  const axis=`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}" stroke="rgba(236,197,78,.30)"/>`;
+  const every=Math.max(1,Math.ceil(n/6));
+  const xl=pts.map((p,i)=>(i%every===0||i===n-1)?`<text x="${X(i).toFixed(1)}" y="${H-12}" fill="#a07c4a" font-size="11" text-anchor="middle">${p.label}</text>`:'').join('');
+  const line=(vals,color,dash)=>`<path d="${curve(vals)}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${dash?` stroke-dasharray="${dash}"`:''}/>`;
+  const dots=pts.map((p,i)=>{
+    const net=p.inc-p.exp;
+    const tip=`${p.key}\n收入 ${fmtC(p.inc,bc)}\n支出 ${fmtC(p.exp,bc)}\n结余 ${fmtC(net,bc)}`;
+    return `<g><title>${escapeHtml(tip)}</title>`
+      +`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.inc).toFixed(1)}" r="2.6" fill="#7fce9e"/>`
+      +`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.exp).toFixed(1)}" r="2.6" fill="#f08a7a"/>`
+      +`<rect x="${(X(i)-(W-padL-padR)/(2*Math.max(1,n-1))).toFixed(1)}" y="${padT}" width="${((W-padL-padR)/Math.max(1,n-1)).toFixed(1)}" height="${H-padT-padB}" fill="transparent"/></g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}">${grid}${axis}`
+    +line(nets,'#ecc54e','5 4')+line(pts.map(p=>p.exp),'#f08a7a')+line(pts.map(p=>p.inc),'#7fce9e')
+    +`${dots}${xl}</svg>`;
+}
+function renderFinTrend(tx,bc){
+  const el=$('finTrendChart');if(!el)return;
+  document.querySelectorAll('#finTrendSeg button').forEach(b=>b.classList.toggle('on',b.dataset.p===finTrendPeriod));
+  const cur=tx.filter(t=>(t.cur||'CNY')===bc);
+  const pts=finTrendBuckets().map(b=>({
+    key:b.key,label:b.label,
+    inc:cur.filter(t=>t.type==='income'&&b.match(t)).reduce((s,t)=>s+t.amount,0),
+    exp:cur.filter(t=>t.type==='expense'&&b.match(t)).reduce((s,t)=>s+t.amount,0)
+  }));
+  const ti=pts.reduce((s,p)=>s+p.inc,0),te=pts.reduce((s,p)=>s+p.exp,0);
+  const lbl=finTrendPeriod==='d30'?'近 30 天':finTrendPeriod==='m6'?'近 6 个月':'近 12 个月';
+  if(!ti&&!te){el.innerHTML=`<p class="empty">${lbl}还没有 ${sym(bc)} 收支记录</p>`;$('finTrendNote').textContent='';return}
+  el.innerHTML=finLineChart(pts,bc);
+  $('finTrendNote').textContent=`${lbl}（统计货币 ${sym(bc)}）：收入 ${fmtC(ti,bc)} · 支出 ${fmtC(te,bc)} · 结余 ${fmtC(ti-te,bc)}。鼠标停在曲线上可看每期明细。`;
+}
+
+/* ============ 财务健康评级 ============ */
+const HEALTH_GRADES=[
+  {min:85,g:'A',t:'优秀',c:'#7fce9e',d:'储蓄、储备、负债都在健康区间，保持现在的节奏。'},
+  {min:70,g:'B',t:'健康',c:'#7fce9e',d:'整体稳健，把下面分数最低的一项补上就更好了。'},
+  {min:55,g:'C',t:'一般',c:'#ecc54e',d:'有明显短板，建议先盯住得分最低的一项改善。'},
+  {min:40,g:'D',t:'偏紧',c:'#ecc54e',d:'结余或储备偏薄，先压缩最大的支出类目。'},
+  {min:0 ,g:'E',t:'警戒',c:'#f08a7a',d:'支出接近或超过收入，建议先做一个月的强制预算。'}
+];
+const clamp01=v=>Math.max(0,Math.min(1,v));
+function finHealthMetrics(tx,acc,bc,budget){
+  const today=todayKey();
+  const cutoff=finDayKey(new Date(Date.now()-89*864e5));
+  const win=tx.filter(t=>(t.cur||'CNY')===bc&&t.date>=cutoff&&t.date<=today);
+  const inc=win.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const exp=win.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const mExp=exp/3;
+  const curAcc=acc.filter(a=>(a.cur||'CNY')===bc);
+  const assets=curAcc.reduce((s,a)=>s+(+a.balance||0),0);
+  const pos=curAcc.filter(a=>a.balance>0).reduce((s,a)=>s+a.balance,0);
+  const debt=curAcc.filter(a=>a.balance<0).reduce((s,a)=>s-a.balance,0);
+  const monthExp=tx.filter(t=>t.type==='expense'&&(t.cur||'CNY')===bc&&t.date.slice(0,7)===monthKey()).reduce((s,t)=>s+t.amount,0);
+  const m=[];
+  // 1) 储蓄率
+  if(inc>0){const r=(inc-exp)/inc;
+    m.push({k:'储蓄率',w:30,s:clamp01(r/.4)*30,v:(r*100).toFixed(0)+'%',
+      tip:r>=.3?'近 90 天每赚 100 元存下 '+(r*100).toFixed(0)+' 元，很稳。':r>0?'近 90 天结余 '+fmtC(inc-exp,bc)+'，目标是把储蓄率做到 30%。':'近 90 天支出超过收入 '+fmtC(exp-inc,bc)+'，这是最该先解决的问题。'});
+  }else m.push({k:'储蓄率',w:30,na:'近 90 天没有 '+sym(bc)+' 收入记录，记几笔收入后才能评分。'});
+  // 2) 应急储备
+  if(mExp>0||assets!==0){const months=mExp>0?assets/mExp:(assets>0?12:0);
+    m.push({k:'应急储备',w:30,s:clamp01(months/6)*30,v:months<0?'0 个月':months>60?'60+ 个月':months.toFixed(1)+' 个月',
+      tip:mExp>0?`总资产 ${fmtC(assets,bc)} ÷ 月均支出 ${fmtC(mExp,bc)}，`+(months>=6?'够撑半年以上。':`建议攒到 6 个月（约 ${fmtC(mExp*6,bc)}）。`):'还没有支出记录，暂按资产估算。'});
+  }else m.push({k:'应急储备',w:30,na:'需要账户余额或支出记录才能算出能撑几个月。'});
+  // 3) 预算执行
+  if(budget>0){const u=monthExp/budget;
+    m.push({k:'预算执行',w:20,s:clamp01((1.2-u)/.5)*20,v:(u*100).toFixed(0)+'%',
+      tip:u<=.7?'本月用了预算的 '+(u*100).toFixed(0)+'%，节奏很好。':u<=1?`本月已用 ${fmtC(monthExp,bc)} / ${fmtC(budget,bc)}，注意收尾。`:`本月超预算 ${fmtC(monthExp-budget,bc)}。`});
+  }else m.push({k:'预算执行',w:20,na:'还没设本月预算，设置后这一项才计分。'});
+  // 4) 负债状况
+  if(curAcc.length){const ratio=pos>0?debt/pos:(debt>0?1:0);
+    m.push({k:'负债状况',w:20,s:clamp01(1-ratio/.5)*20,v:debt?(ratio*100).toFixed(0)+'%':'无负债',
+      tip:debt?`负债 ${fmtC(debt,bc)} 占资产 ${fmtC(pos,bc)} 的 ${(ratio*100).toFixed(0)}%，`+(ratio<=.2?'在安全范围。':'建议优先还掉利息最高的一笔。'):'账户里没有负数余额（负债填负数即可统计）。'});
+  }else m.push({k:'负债状况',w:20,na:'添加账户后才能评估负债。'});
+  return m;
+}
+function renderFinHealth(tx,acc,bc,budget){
+  const el=$('finHealth');if(!el)return;
+  const m=finHealthMetrics(tx,acc,bc,budget);
+  const avail=m.filter(x=>!x.na).reduce((s,x)=>s+x.w,0);
+  const rows=m.map(x=>{
+    const pct=x.na?0:Math.round(x.s/x.w*100);
+    return `<div class="hrow${x.na?' na':''}">
+      <div class="top"><span class="c">${x.k}${x.na?'':' · '+x.v}</span><span class="m">${x.na?'未计分':x.s.toFixed(0)+' / '+x.w}</span></div>
+      <div class="bar"><i style="width:${x.na?100:pct}%${x.na?'':`;background:linear-gradient(90deg,${pct>=70?'#4e8f68,#7fce9e':pct>=40?'#caa23a,#f5d878':'#a8483a,#f08a7a'})`}"></i></div>
+      <div class="tip">${escapeHtml(x.na||x.tip)}</div></div>`;
+  }).join('');
+  if(avail<30){
+    el.innerHTML=`<p class="empty">数据还不够评级：先添加账户余额，并记几笔收入 / 支出。</p>${rows}`;
+    return;
+  }
+  const score=Math.round(m.filter(x=>!x.na).reduce((s,x)=>s+x.s,0)/avail*100);
+  const g=HEALTH_GRADES.find(x=>score>=x.min);
+  const weak=m.filter(x=>!x.na).sort((a,b)=>a.s/a.w-b.s/b.w)[0];
+  el.innerHTML=`<div class="health">
+      <div><div class="sc" style="color:${g.c}">${score}<small>/ 100</small></div></div>
+      <div><div class="gd" style="color:${g.c}">${g.g} · ${g.t}</div>
+        <div class="gt">${avail<60?'数据偏少，这个分只能当参考：':''}${g.d}${avail<100?`（未计分项占 ${100-avail} 分，已按剩余项折算）`:''}</div></div>
+    </div>${rows}
+    <p class="hint">按「统计货币 ${sym(bc)}」评分，取近 90 天收支 + 当前账户余额。当前最该改善：<b style="color:var(--gold)">${weak.k}</b>。</p>`;
+}
 function renderFinance(){
   if(!$('txCat').innerHTML)fillCats();
   if(!$('txDate').value)$('txDate').value=todayKey();
@@ -1231,7 +1422,7 @@ function renderFinance(){
     const avg=monthExpBC/dayNum;const proj=avg*dim;
     $('finBudgetNote').textContent=`统计货币 ${bsym} · 日均 ${fmtC(avg,bc)} · 本月预计 ${fmtC(proj,bc)}`+(monthExpBC>budget?' · 已超预算':` · 剩 ${fmtC(remain,bc)}`);
   }else $('finBudgetNote').textContent=`预算与下方统计图按「统计货币 ${bsym}」计算（仅统计 ${bsym} 的支出）。设置预算后显示进度与预测。`;
-  renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,bc);
+  renderTxList(tx);renderAccounts(acc);renderCatBreakdown(tx,bc);renderFinTrend(tx,bc);renderFinHealth(tx,acc,bc,budget);
   const series=[];
   for(let d=1;d<=td;d++){const key=`${ty}-${String(tm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;series.push({d:key,v:tx.filter(t=>t.type==='expense'&&t.date===key&&(t.cur||'CNY')===bc).reduce((s,t)=>s+t.amount,0)})}
   $('spendChart').innerHTML=finBarChart(series);
