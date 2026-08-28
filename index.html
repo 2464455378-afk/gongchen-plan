@@ -192,6 +192,10 @@
   .fin-stat .v{font-size:21px;font-weight:800;color:var(--cream)}
   .fin-stat .v.sp{color:var(--gold)} .fin-stat .v.neg{color:var(--redx)} .fin-stat .v.pos{color:var(--green)}
   .fin-stat .l{font-size:12px;color:var(--muted2);margin-top:3px}
+  .fin-stat.span2{grid-column:1/-1}
+  .acct-sum{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+  .acct-sum span{font-size:13px;color:var(--muted2)}
+  .acct-sum b{color:var(--gold);font-weight:700;margin-left:6px}
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
   .seg button{background:var(--card-2);color:var(--muted2);border-radius:0;padding:8px 18px;font-weight:600}
   .seg button.on{background:rgba(236,197,78,.16);color:var(--gold)}
@@ -430,10 +434,11 @@
         <div class="card">
           <h2>💰 财务总览 <span class="en">OVERVIEW</span></h2>
           <div class="fin-grid">
-            <div class="fin-stat"><div class="v pos" id="finAssets">¥0.00</div><div class="l">总资产</div></div>
+            <div class="fin-stat"><div class="v pos" id="finAssetsCNY">¥0.00</div><div class="l">总资产 · 人民币</div></div>
+            <div class="fin-stat"><div class="v pos" id="finAssetsUSD">$0.00</div><div class="l">总资产 · 美元</div></div>
             <div class="fin-stat"><div class="v sp" id="finMonth">¥0.00</div><div class="l">本月支出</div></div>
             <div class="fin-stat"><div class="v sp" id="finToday">¥0.00</div><div class="l">今日支出</div></div>
-            <div class="fin-stat"><div class="v" id="finRemain">—</div><div class="l">本月预算剩余</div></div>
+            <div class="fin-stat span2"><div class="v" id="finRemain">—</div><div class="l">本月预算剩余</div></div>
           </div>
           <div class="pbar"><i id="finBudgetBar" style="width:0%"></i></div>
           <p class="hint" id="finBudgetNote"></p>
@@ -456,14 +461,16 @@
           </div>
           <div class="add-row">
             <input type="number" id="txAmount" step="0.01" placeholder="金额" style="flex:1">
-            <select id="txCur" style="width:auto"><option value="CNY">¥ 人民币</option><option value="USD">$ 美元</option></select>
+            <select id="txCur" style="width:auto" onchange="onTxCurChange()"><option value="CNY">¥ 人民币</option><option value="USD">$ 美元</option></select>
             <select id="txCat"></select>
           </div>
           <div class="add-row">
             <div class="field"><label>日期</label><input type="date" id="txDate"></div>
+            <div class="field"><label>记入账户</label><select id="txAcct"></select></div>
             <div class="field" style="flex:2"><label>备注（可选）</label><input id="txNote" placeholder="买了什么…"></div>
             <button onclick="addTx()" style="align-self:flex-end">记账</button>
           </div>
+          <p class="hint" id="txAcctHint">记账后自动增减所选账户余额：收入 +，支出 −。删除记录会自动还原。</p>
         </div>
 
         <div class="card">
@@ -475,7 +482,7 @@
             <button onclick="addAccount()">添加</button>
           </div>
           <div id="acctList"></div>
-          <p class="hint">负债填负数（如信用卡欠款 -2000）。总资产 = 所有账户余额之和。</p>
+          <p class="hint">负债填负数（如信用卡欠款 -2000）。总资产 = 所有账户余额之和，按人民币 / 美元分别统计；记一笔时选中的账户会自动增减。</p>
         </div>
 
         <div class="card">
@@ -1139,14 +1146,40 @@ function setTxType(t){
   fillCats();
 }
 function fillCats(){const cats=txType==='expense'?EXP_CATS:INC_CATS;$('txCat').innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('')}
+function onTxCurChange(){save('fin_lastCur',$('txCur').value);fillAccts();}
+function fillAccts(){
+  const el=$('txAcct');if(!el)return;
+  const cur=$('txCur')?$('txCur').value:'CNY';
+  const list=load('fin_accounts',[]).filter(a=>(a.cur||'CNY')===cur);
+  const keep=el.value;
+  el.innerHTML=`<option value="">不记入账户</option>`+list.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}（${fmtC(a.balance,a.cur)}）</option>`).join('');
+  if(keep&&list.some(a=>a.id===keep))el.value=keep;
+  else if(list.length)el.value=list[0].id;
+}
+// 收入 +，支出 −；删除记录时取反还原
+function applyTxToAccount(t,sign){
+  if(!t||!t.acct)return false;
+  const accs=load('fin_accounts',[]);const a=accs.find(x=>x.id===t.acct);
+  if(!a)return false;
+  a.balance=+(((+a.balance||0)+sign*(t.type==='income'?1:-1)*(+t.amount||0)).toFixed(2));
+  save('fin_accounts',accs);return true;
+}
 function addTx(){
   const amt=parseFloat($('txAmount').value);if(!amt||amt<=0){alert('请输入有效金额');return}
   const cur=$('txCur')?$('txCur').value:'CNY';save('fin_lastCur',cur);
+  const acct=$('txAcct')?$('txAcct').value:'';
   const tx=load('fin_tx',[]);
-  tx.push({id:uid(),date:$('txDate').value||todayKey(),amount:amt,type:txType,cat:$('txCat').value,note:$('txNote').value.trim(),cur});
-  save('fin_tx',tx);$('txAmount').value='';$('txNote').value='';renderFinance();
+  const t={id:uid(),date:$('txDate').value||todayKey(),amount:amt,type:txType,cat:$('txCat').value,note:$('txNote').value.trim(),cur,acct};
+  tx.push(t);save('fin_tx',tx);
+  applyTxToAccount(t,1);
+  $('txAmount').value='';$('txNote').value='';renderFinance();
 }
-function delTx(id){save('fin_tx',load('fin_tx',[]).filter(x=>x.id!==id));renderFinance()}
+function delTx(id){
+  const tx=load('fin_tx',[]);const t=tx.find(x=>x.id===id);
+  save('fin_tx',tx.filter(x=>x.id!==id));
+  applyTxToAccount(t,-1);
+  renderFinance();
+}
 function addAccount(){
   const name=$('acctName').value.trim();const bal=parseFloat($('acctBal').value);
   if(!name){alert('请输入账户名');return}
@@ -1171,13 +1204,17 @@ function renderFinance(){
   if(!$('txCat').innerHTML)fillCats();
   if(!$('txDate').value)$('txDate').value=todayKey();
   if($('txCur'))$('txCur').value=getLastCur();
+  fillAccts();
   if($('budgetCur'))$('budgetCur').value=getBudgetCur();
   const bc=getBudgetCur();const bsym=sym(bc);
   $('finBudget').value=load('fin_budget','')||'';
   const tx=load('fin_tx',[]);const acc=load('fin_accounts',[]);const budget=parseFloat(load('fin_budget',''))||0;
   const assetsByCur=sumByCur(acc,a=>a.balance);
-  $('finAssets').textContent=multiFmt(assetsByCur);
-  $('finAssets').className='v '+(Object.values(assetsByCur).some(v=>v<0)?'neg':'pos');
+  Object.keys(CUR_SYM).forEach(c=>{
+    const el=$('finAssets'+c);if(!el)return;
+    const v=assetsByCur[c]||0;
+    el.textContent=fmtC(v,c);el.className='v '+(v<0?'neg':'pos');
+  });
   const mk=monthKey();
   const monthExpByCur=sumByCur(tx.filter(t=>t.type==='expense'&&t.date.slice(0,7)===mk),t=>t.amount);
   const todayExpByCur=sumByCur(tx.filter(t=>t.type==='expense'&&t.date===todayKey()),t=>t.amount);
@@ -1203,16 +1240,20 @@ function renderTxList(tx){
   const el=$('txList');
   if(!tx.length){el.innerHTML='<p class="empty">还没有记账，去上面记一笔</p>';return}
   const sorted=[...tx].sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,40);
+  const accMap={};load('fin_accounts',[]).forEach(a=>accMap[a.id]=a.name);
   el.innerHTML=sorted.map(t=>`<div class="txn">
     <div class="ic">${escapeHtml(t.cat.slice(0,2))}</div>
-    <div class="info"><b>${escapeHtml(t.cat)}${t.note?' · '+escapeHtml(t.note):''}</b><i>${t.date}</i></div>
+    <div class="info"><b>${escapeHtml(t.cat)}${t.note?' · '+escapeHtml(t.note):''}</b><i>${t.date}${t.acct&&accMap[t.acct]?' · '+escapeHtml(accMap[t.acct]):''}</i></div>
     <div class="amt ${t.type==='expense'?'exp':'inc'}">${t.type==='expense'?'-':'+'}${fmtC(t.amount,t.cur)}</div>
     <button class="del" onclick="delTx('${t.id}')">×</button></div>`).join('');
 }
 function renderAccounts(acc){
   const el=$('acctList');
   if(!acc.length){el.innerHTML='<p class="empty">添加账户以统计总资产</p>';return}
-  el.innerHTML=acc.map(a=>`<div class="acct"><span class="an">${escapeHtml(a.name)}</span><span class="ab">${fmtC(a.balance,a.cur)}</span><button class="del" onclick="delAccount('${a.id}')">×</button></div>`).join('');
+  const byCur=sumByCur(acc,a=>a.balance);
+  const sums=Object.keys(CUR_SYM).map(c=>`<span>${c==='CNY'?'人民币合计':'美元合计'}<b>${fmtC(byCur[c]||0,c)}</b></span>`).join('');
+  el.innerHTML=acc.map(a=>`<div class="acct"><span class="an">${escapeHtml(a.name)}</span><span class="ab">${fmtC(a.balance,a.cur)}</span><button class="del" onclick="delAccount('${a.id}')">×</button></div>`).join('')
+    +`<div class="acct-sum">${sums}</div>`;
 }
 let catPeriod='month';
 const CAT_PERIOD_LABEL={month:'本月',quarter:'本季度',year:'本年'};
